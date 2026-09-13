@@ -11,7 +11,7 @@ Sistem dokumentasi operasional forensik digital yang dibangun untuk satu tujuan:
 
 [![Standard](https://img.shields.io/badge/selaras-ISO%2FIEC%2027037:2012-8A6D1C)](FEATURE.md)
 [![Status](https://img.shields.io/badge/status-desain%20baselined%20%C2%B7%20implementasi%20berjalan-F0B429)](#-status-proyek)
-[![License](https://img.shields.io/badge/license-TBD-lightgrey)](#-lisensi)
+[![License](https://img.shields.io/badge/license-MIT-green)](#-lisensi)
 [![Platform](https://img.shields.io/badge/platform-GitHub%20Pages%20%C2%B7%20offline--first-181717)](#-teknologi)
 
 </div>
@@ -166,7 +166,7 @@ migrasi tanpa kehilangan ketertelusuran, bukan sinkronisasi.
 
 ## Lisensi
 
-Belum ditentukan (keputusan D-17 terbuka). Kandidat: **MIT**.
+Dirilis di bawah [Lisensi MIT](LICENSE).
 
 ---
 

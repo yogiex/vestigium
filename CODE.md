@@ -1,6 +1,6 @@
 # CODE.md — Standar Clean Code Vestigium
 
-> **Versi:** 0.1 · **Status:** Draft (menyesuaikan Decision Register PRD §3)
+> **Versi:** 1.0 · **Status:** Baselined · **SUPERSEDES v0.1 seluruhnya** (v0.1 vanilla dihapus — jangan biarkan dua versi hidup)
 > **Hierarki:** Bila aturan di dokumen ini bertentangan dengan PRD/FEATURE → PRD/FEATURE menang.
 > Dokumen ini hanya mengatur **bentuk kode**, bukan isi fitur.
 > **Asumsi aktif (dari PRD):** D-10 localStorage · D-11 multi-file script klasik tanpa build ·
@@ -342,6 +342,9 @@ Aturan: logika baru yang murni = sertakan kasus uji di harness.
 8. Derived value ikut disimpan? (CC-22)
 9. Fitur merujuk FR di PRD dan klausulnya masih akurat? (CC-09)
 10. Smoke test S yang relevan lulus?
+11. Parameter URL & referensi = internal UUID via selector, bukan nomor bisnis? (SEC-06)
+12. CSP masih `connect-src 'none'`; tanpa `eval`/inline handler baru? (SEC-02/03)
+13. Schema impor backup `.strict()`; `npm audit --audit-level=high` hijau? (SEC-04/08)
 
 > Kriteria menerima: **semua** jawaban bersih. Satu pelanggaran CC = revisi.
 
@@ -394,3 +397,13 @@ semuanya struktural.
 | verification | verifikasi integritas |
 | seal | seal / penyegelan |
 | examiner | pemeriksa (DEFR/DES) |
+
+---
+
+## 15. Secure by Design (K-2/K-3)
+
+SEC-02, **Zero-outbound enforcement**: CSP `connect-src 'none'`. DILARANG `fetch`, `XMLHttpRequest`, `WebSocket`, `<img src="http…">`, font CDN, script CDN. Setelah halaman dimuat, aplikasi menghasilkan **nol** request jaringan.
+
+SEC-03, **XSS prevention**: DILARANG `dangerouslySetInnerHTML`, `eval`, `new Function`, inline event handler. Semua data user di-escape oleh React bawaan. `style-src 'unsafe-inline'` diterima di MVP (kebutuhan utility Tailwind; dicatat jujur — K-3), dipertimbangkan diperketat saat implementasi bila build mengizinkan.
+
+SEC-06, **Parameter URL & referensi**: DIPUTUSKAN (K-2) — referensi antar-record dan parameter URL wajib internal UUID (`crypto.randomUUID()` — opaque, tak terenumerasi). Nomor bisnis (`EV-0042`, `CASE-2025-014`) = display & pencarian saja, DILARANG menjadi kunci akses/routing — sejak MVP, bukan hanya L3. Parameter URL (`?id=…`) **hanya** internal UUID sebagai kunci pembanding terhadap state via selector — nomor bisnis tidak pernah menjadi parameter akses.

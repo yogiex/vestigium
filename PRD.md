@@ -1,6 +1,6 @@
 # PRD.md — Vestigium v1.0 (MVP)
 
-> **Versi:** 0.1 · **Status:** DRAFT — menunggu konfirmasi Decision Register (§3)
+> **Versi:** 0.2 · **Status:** BASELINED — D-01…D-21 diadopsi sesuai rekomendasi; D-22 & K-1…K-6 baselined (lihat §3 & changelog FEATURE.md)
 > **Referensi:** FEATURE.md (kontrak fitur) · ISO/IEC 27037:2012 · README.md
 > **Notasi persyaratan:** **WAJIB** = harus ada, diverifikasi · **TIDAK BOLEH** = larangan keras ·
 > **SEBAIKNYA** = disarankan, boleh ditunda · **DAPAT** = opsional
@@ -53,6 +53,7 @@ Legenda: 🏛 = **arsitektural** — jawaban mengubah struktur kode; ◻ = defau
 | D-16 | Konfirmasi destruktif | Berjenjang: konfirmasi biasa → ketik kata kunci untuk wipe total | ◻ |
 | D-17 | Lisensi repo | MIT (terbuka) — atau internal/proprietary? | ◻ |
 | D-18 🏛 | Label evidence format | A4 grid (multi label per lembar) untuk MVP; 105×60mm = P1 | 🏛 |
+| D-22 🏛 | Dua environment (mvp/production) | Build-time mode `VESTIGIUM_MODE=mvp\|production`; satu `main`, dua pipeline; dilarang strategi dua branch; monorepo extraction ditunda hingga L3 | 🏛 ✅ Baselined |
 
 > **Prosedur konfirmasi:** balas "setuju semua" — atau sebutkan ID yang diubah beserta keputusannya.
 > Keputusan yang disetujui dipindahkan ke kolom Status dan dokumen dinaikkan ke v1.0 (baselined).
@@ -110,6 +111,9 @@ Legenda: 🏛 = **arsitektural** — jawaban mengubah struktur kode; ◻ = defau
 - **FR-M4-06** Record akuisisi **TIDAK BOLEH** diedit setelah dibuat.
 - **FR-M4-07** Bila hash sumber ≠ hash image saat input: sistem memberi peringatan keras **tetapi menyimpan apa adanya** (dokumentasi jujur) + tercatat di audit.
 - **FR-M4-08** Live acquisition tanpa justifikasi → ditolak.
+- **FR-M4-09** **SEBAIKNYA** juga: `sourceClockNotes` — catatan kondisi jam sistem sumber vs UTC saat akuisisi
+  (mis. "jam server tertinggal 4 mnt dari UTC"), menjawab serangan klasik terhadap validitas
+  timestamp artefak (P-08).
 
 ### M5 — Preservation & Integrity (§6.5)
 
@@ -178,6 +182,7 @@ Legenda: 🏛 = **arsitektural** — jawaban mengubah struktur kode; ◻ = defau
 | NFR-08 | Ketahanan data: simpan segera setelah setiap mutasi; storage rusak → pesan jelas + dorongan ekspor, bukan crash diam |
 | NFR-09 | Anomali jam (deteksi pergeseran besar recordedAt) → peringatan ke operator (SEBAIKNYA) |
 | NFR-10 | Tanpa build step; script klasik multi-file (D-11) |
+| NFR-11 | Postur secure-by-design sesuai CODE.md §15: XSS = akses tak sah total terhadap register (dilarang `dangerouslySetInnerHTML`/`eval`), CSP `connect-src 'none'`, satu jalur input eksternal (impor backup via zod `.strict()`), least privilege: tanpa izin browser, tanpa request runtime, dependensi ter-audit. IDOR/BAC = N/A struktural (tanpa server). |
 
 ---
 

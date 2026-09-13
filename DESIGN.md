@@ -1,6 +1,6 @@
 # DESIGN.md — Vestigium: Desain UI/UX & Arsitektur Frontend
 
-> **Versi:** 0.1 · **Status:** Draft
+> **Versi:** 0.2 · **Status:** Draft
 > **Stack (baru):** Next.js 14+ (App Router, TypeScript) · shadcn/ui · Tailwind CSS
 > **Referensi:** PRD.md (persyaratan FR/NFR) · FEATURE.md (modul) · CODE.md (disiplin kode)
 > **Catatan re-baseline:** Keputusan D-11 supersedes (lihat §1). Prinsip domain PRD §2 tidak berubah.
@@ -95,19 +95,25 @@ Hierarki: judul halaman `text-2xl font-semibold tracking-tight` · label form pa
 
 ## 4. Arsitektur Frontend
 
-### 4.1 Konfigurasi static export (D-19)
+### 4.1 Konfigurasi build (mode-aware — D-22)
 
 ```js
 // next.config.mjs
+const MODE = process.env.VESTIGIUM_MODE ?? 'mvp'; // default fail-safe = mvp
+
 const nextConfig = {
-  output: 'export',
-  basePath: '/vestigium',           // nama repo — project page GitHub
-  images: { unoptimized: true },
+  ...(MODE === 'mvp'
+    ? { output: 'export', basePath: '/vestigium', images: { unoptimized: true } }
+    : {}), // production: full build, API routes aktif (L3)
+  env: { NEXT_PUBLIC_VESTIGIUM_MODE: MODE },
 };
+export default nextConfig;
 ```
 
-Deploy via **GitHub Actions** (build → upload `out/` ke Pages) — lebih andal daripada
-branch deploy untuk Next.js, dan `basePath` otomatis benar. Tambahkan `.nojekyll` di output.
+Deploy MVP via **GitHub Actions** (build → upload `out/` → Pages) + `.nojekyll` di output.
+Konfigurasi ini tidak boleh "disederhanakan" — lihat CODE.md CC-30.
+
+Detail dua mode → §4.4.
 
 ### 4.2 Routing: kendala static export & polanya ⚠️
 
@@ -117,8 +123,10 @@ saat runtime). Pola yang dipakai:
 
 ```
 /evidence                → daftar
-/evidence/detail?id=...  → detail, baca id via useSearchParams() (wajib dibungkus <Suspense>)
-/reports/preview?case=.. → laporan
+/evidence/detail?id=<uuid> → detail (parameter = **internal UUID** — SEC-06/K-2;
+                             nomor bisnis `EV-0042` hanya display & pencarian,
+                             dilarang menjadi kunci akses/routing)
+/reports/preview?case=<uuid> → laporan
 ```
 
 Route map lengkap:
@@ -164,6 +172,25 @@ src/
 
 Aturan arsitektur: `lib/` bebas React; `store/` bebas React DOM (bisa dipakai server
 kelak); hanya `components/` & `app/` yang menyentuh UI.
+
+### 4.4 Multi-Environment (D-22)
+
+Satu codebase, dua pipeline build — mode dipilih saat build (static export tidak punya
+runtime env). BUKAN dua branch, BUKAN dua konfigurasi dalam satu build.
+
+| | Mode MVP (L1) | Mode Production (L3) |
+|---|---|---|
+| Build | `VESTIGIUM_MODE=mvp npm run build` | `VESTIGIUM_MODE=production npm run build` |
+| Output | `output:'export'` → `out/` → GitHub Pages (Actions) | Full build → API aktif → Vercel/VPS |
+| Store | zustand → `vestigium_mvp_v1` (localStorage) | store kedua, interface sama → API/DB (`vestigium_prod_v1`) |
+| Zero-outbound | berlaku penuh (S7) | klien tetap lokal-first |
+
+Aturan keras:
+1. Default mode = `mvp` (fail-safe).
+2. DILARANG strategi dua branch — `schemaVersion` wajib tunggal lintas mode (DATA.md §9).
+3. Selama mode mvp, DILARANG ada `app/api/**` di tree — satu saja mematahkan export build.
+4. Interop antar environment HANYA via berkas backup JSON (DATA.md §9) — bukan sinkronisasi.
+5. Monorepo extraction (`packages/core` + `apps/static` + `apps/server`) hanya saat L3 dimulai.
 
 ---
 

@@ -1,6 +1,6 @@
 # FEATURE.md — Vestigium (Digital Forensic Record System)
 
-> **Versi:** 1.0 (Baselined) · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
+> **Versi:** 1.1 · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
 > **Acuan domain:** ISO/IEC 27037:2012 — Identification · Collection · Acquisition · Preservation
 > **Dokumen turunan:** `PRD.md` (persyaratan FR/NFR) · `DATA.md` (skema) · `DESIGN.md` (UI/UX) · `CODE.md` (disiplin kode)
 > **Aturan dokumen:** Setiap fitur baru WAJIB masuk dokumen ini dulu sebelum diimplementasikan.
@@ -23,6 +23,34 @@ Bukti digital jarang gugur di persidangan karena isinya salah — ia gugur karen
 **Vestigium adalah sistem dokumentasi operasional forensik** — bukan alat analisis.
 Ia memaksa setiap tindakan terhadap bukti terdokumentasi serentak, append-only,
 dan **dapat direkonstruksi pihak ketiga tanpa kehadiran operator aslinya**.
+
+---
+
+## 1.1 Problem Register — Masalah Nyata yang Dijawab
+
+Akhir dari setiap fitur adalah masalah nyata di praktik forensik digital, bukan klausul standard.
+Mekanisme: **Cegah** (deny-by-default / gerbang) · **Rekam** (penurunan biaya mencatat benar saat kejadian) · **Buktikan** (rekonstruksi pihak ketiga bertahun-tahun kemudian).
+
+| ID | Masalah | Tier | Mekanisme | Modul / Prinsip |
+|---|---|---|---|---|
+| P-01 | Chain of custody terputus | 1 | Rekam + Buktikan | M6 · konstitusi #3 |
+| P-02 | Catatan dibuat menyusul (dan berpura-pura tidak) | 1 | Rekam | konstitusi #2 (dual timestamp) |
+| P-03 | Hash dihitung sekali, tak pernah diverifikasi ulang | 1 | Buktikan | M5 |
+| P-04 | Tertukarnya barang bukti fisik | 2 | Rekam | M2 (univocal, serial, seal unik) |
+| P-05 | Data volatile hilang karena urutan salah | 3 | Cegah + Rekam | M2 power state → M3 checklist (S2) |
+| P-06 | Otorisasi tidak ada / terlampaui | 1 | Cegah | M1 gerbang otorisasi (S6) |
+| P-07 | Identitas orang tidak konsisten antar dokumen | 2 | Rekam + Buktikan | M7 (roster tunggal) |
+| P-08 | Kekacauan waktu & zona | 2 | Rekam | konstitusi #5 + `sourceClockNotes` |
+| P-09 | Dokumentasi tersebar & tak standar | 4 | Rekam | seluruh sistem + M9 |
+| P-10 | Ketergantungan satu orang (SPOF) | 4 | Buktikan | konstitusi #8 |
+| P-11 | Catatan proses bisa diedit diam-diam | 1 | Buktikan | M8 (append-only + hash-chain) |
+| P-12 | Alat & metode tidak terdokumentasi | 2 | Rekam | M4 (tool/versi/write blocker) |
+| P-13 | Original & working copy tercampur | 3 | Rekam | konstitusi #7 + `originalChanged` |
+| P-14 | Kehilangan kendali register pada volume besar | 4 | Rekam | penomoran permanen + dashboard |
+| P-15 | Gap transfer antar lembaga | 3 | Rekam + Buktikan | M6 (`Party: external`, TTD basah) |
+| P-16 | Formalitas penyitaan KUHAP dilewati | 3 | Cegah + Rekam | M3 (saksi, packaging, seal — INV-10) |
+
+Tier: **1** = case-killing & sering · **2** = erosi kredibilitas kumulatif · **3** = keutuhan bukti/keabsahan (parsial terjawab — dunia fisik tetap milik manusia) · **4** = organisasional (nilai samping).
 
 ---
 
@@ -135,6 +163,7 @@ Hukum lintas-fitur. Modul mana pun yang melanggar = bug desain.
 | State & persist | Zustand + persist ke localStorage (IndexedDB = P2) |
 | Validasi | Zod schema — dipakai form sekaligus lapisan domain (defense-in-depth) |
 | Hosting | **GitHub Pages** via GitHub Actions (build → upload `out/`) |
+| Environment | Dua mode build: `mvp` (GitHub Pages, L1) · `production` (Vercel/VPS, L3) — satu codebase, dua pipeline (D-22) |
 | Font | Self-host saat build (`next/font`) — nol request runtime |
 | Karakter | Offline penuh, tanpa server, tanpa backend di MVP |
 
@@ -361,13 +390,17 @@ Fitur dinyatakan selesai jika:
 | localStorage terbatas ~5 MB | Lampiran besar tak muat | Data teks MVP jauh di bawah kuota; foto → IndexedDB (P2); berkas bukti tetap di luar sistem (hanya hash) |
 | Tanpa sinkronisasi realtime | Tim bisa kerja di data terpisah | Ekspor/impor JSON + merge (P1); satu "register of record" per tim |
 | Browser = lingkungan tak terkendali | Screenshot/manipulasi UI | Kepercayaan akhir pada artefak tercetak + tanda tangan basah |
+| Dua mode berbagi origin/domain | localStorage terbaca lintas mode | Key namespaced per mode (`vestigium_mvp_v1`) — DATA.md §8 |
 
 ---
 
 ## 13. Di Luar Cakupan v1
 
 Analisis forensik (carving, timeline reconstruction) · autentikasi multi-pengguna/server ·
-manajemen insiden (27035) · integrasi tool akuisisi pihak ketiga · penandatanganan PKI lembaga.
+manajemen insiden (27035) · integrasi tool akuisisi pihak ketiga · penandatanganan PKI lembaga ·
+Tautan perangkat lintas-kasus (device linking — satu item = satu kasus, keputusan K-5) ·
+penempatan label fisik pada benda (proses manual di lokasi; *mencetak* label = P1) ·
+adopsi lembaga eksternal / multi-tenant (P-15; jalurnya L3).
 (Lapisan 3 — backend penuh — direncanakan pasca-MVP tanpa mengubah prinsip §4.)
 
 ---
@@ -376,13 +409,14 @@ manajemen insiden (27035) · integrasi tool akuisisi pihak ketiga · penandatang
 
 | Dokumen | Status |
 |---|---|
-| FEATURE.md (ini) | ✅ v1.0 Baselined |
-| PRD.md | ✅ 0.1 — decision register D-01…D-21 (rekomendasi diadopsi sebagai default; revisi per ID kapan pun melalui changelog) |
-| CODE.md | ✅ 0.1 vanilla → **v0.2 versi React/TS menunggu** (translasi CC-16/19/23 ke store/zod/React) |
-| DESIGN.md | ✅ 0.1 — Next.js + shadcn, wireframe kunci, komponen domain |
-| DATA.md | ⏳ Terutang — skema final + zod contract, sebelum scaffold data layer |
+| FEATURE.md (ini) | ✅ 1.1 Baselined |
+| PRD.md | ✅ 0.2 — D-01…D-22 baselined |
+| DATA.md | ✅ 1.1 — skema + zod contract + secure import |
+| DESIGN.md | ✅ 0.2 — multi-environment, UUID param |
+| CODE.md | ✅ 1.0 Baselined — React/TS + §15 Secure by Design |
+| AGENTS.md | ✅ 1.0 — aturan agent + security |
 
-Keputusan terbuka: **D-17 lisensi repo** (MIT vs proprietary).
+Keputusan terbuka: **—** (semua D-01…D-22 & K-1…K-6 baselined).
 
 ---
 
@@ -393,3 +427,4 @@ Keputusan terbuka: **D-17 lisensi repo** (MIT vs proprietary).
 | 0.1 | Draft awal: 10 modul, kerangka court-readiness, matriks ketertelusuran |
 | 0.2 | Nama produk ditetapkan: **vestigium** |
 | 1.0 | Re-baseline stack: Next.js + shadcn + Tailwind (D-11 superseded; D-19/20/21 ditambahkan) · dual timestamp menjadi prinsip konstitusi (#2) · skenario penerimaan S1–S7 · jalur evolusi L1/L2/L3 · zero-outbound naik menjadi prinsip konstitusi (#10) · status dokumen & keputusan dirapikan |
+| 1.1 | D-22 multi-environment (build-time mode, dua pipeline) · Problem Register §1.1 (P-01…P-16) · `sourceClockNotes` (K-4) · out-of-scope: device linking, label fisik, adopsi lembaga (K-5) · lisensi MIT (K-1/D-17) · status seluruh dokumen dinaikkan ke baselined |

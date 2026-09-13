@@ -1,6 +1,6 @@
 # DATA.md — Vestigium: Skema Data & Kontrak Validasi
 
-> **Versi:** 1.0 · **Status:** Baselined — acuan tunggal untuk `lib/types.ts` + `lib/schemas.ts`
+> **Versi:** 1.1 · **Status:** Baselined — acuan tunggal untuk `lib/types.ts` + `lib/schemas.ts`
 > **Aturan:** Kode yang menyimpang dari dokumen ini = bug. Perubahan skema wajib lewat revisi
 > dokumen ini + `schemaVersion` baru. Bila bertentangan dengan FEATURE.md → dijelaskan di §12.
 > **Stack:** TypeScript (strict, tanpa `any`) · zod · zustand persist → localStorage.
@@ -222,6 +222,9 @@ export interface AcquisitionRecord {
   // matchStatus TIDAK disimpan — derived (§12.2)
   originalChanged: boolean;  // FR-M4-04 — dipaksa true utk 'live' (refine)
   changeJustification?: string; // wajib bila originalChanged
+  sourceClockNotes?: string; // P-08/K-4: kondisi jam sistem sumber vs UTC saat akuisisi
+                             // (mis. "jam server tertinggal 4 mnt dari UTC") — menjawab
+                             // serangan validitas timestamp artefak di persidangan
   notes?: string;
   recordedAt: UTCString;
 }
@@ -405,12 +408,16 @@ export interface ChainReport {
 
 | Aspek | Nilai |
 |---|---|
-| Key | `vestigium_v1` |
+| Key | `vestigium_${MODE}_v1` → `vestigium_mvp_v1` / `vestigium_prod_v1` (D-22). Konstanta tunggal di `lib/config.ts` — dilarang hardcode key di komponen/store lain. |
 | Library | `zustand/middleware persist` — `version: 1` sinkron dgn `schemaVersion`, `migrate` → registry §9 |
 | Bentuk | Seluruh `VestigiumState` (tanpa `partialize` — state UI transient tidak masuk store) |
 | Persist | Otomatis pasca setiap action gateway (AGENTS §4.2); `setItem` dibungkus try/catch → toast + banner + dorongan ekspor (NFR-08) |
 | Kuota | Meter = `JSON.stringify(state).length`; amber > 80% dari ~5 MB (FR-M10-05) |
 | Hydration | Guard `mounted` untuk UI yang membaca state persist — cegah hydration mismatch static export (AGENTS §6) |
+
+> Namespacing key = kebutuhan **transport** (localStorage per-origin — dua mode di domain sama
+> berbagi storage), BUKAN perubahan skema. `schemaVersion` tetap 1; berkas backup antar mode
+> saling kompatibel.
 
 ---
 
@@ -444,6 +451,8 @@ export interface ChainReport {
                                      tampilkan peringatan keras + biarkan keputusan operator)
 5. Preview (counts, exportedAt, hasil chain) → konfirmasi eksplisit → timpa
 6. Audit: action 'IMPORT', detail nama berkas + chainTip
+7. Impor lintas mode (mvp↔production) diizinkan dan merupakan jalur migrasi resmi antar
+   environment — bukan sinkronisasi.
 ```
 
 ```ts
@@ -558,6 +567,7 @@ divergensi diam-diam; flag untuk changelog FEATURE.md v1.1:
 | Golden chain fixture → hash deterministik + `verifyChain` | §7, INV-17, S4 |
 | Tamper fixture (ubah 1 field) → `firstBrokenSeq` terdeteksi | S4 |
 | Seluruh `*.createSchema` — case valid & tiap refine (INV-09…15) | §3, §10 |
+| Schema `acquisition` menerima `sourceClockNotes` (string opsional), menolak tipe salah | K-4, FR-M4-02 |
 | `nextCaseNo/nextEvidenceNo/nextAcquisitionNo` — rollover tahun, max+1 | §6 |
 | `validateState` mendeteksi referensi menggantung | INV-02/03 |
 | Roundtrip ekspor→impor + migrasi registry | §9, S5 |

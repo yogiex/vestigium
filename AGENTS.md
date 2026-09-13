@@ -1,6 +1,7 @@
 # AGENTS.md — Vestigium
 
 > File ini dibaca otomatis oleh AI coding agent (opencode) sebelum bekerja di repo ini.
+> **Versi 1.0 — Baselined** (D-22 & keputusan keamanan terkunci).
 > Patuhi seluruh isi file. Bila instruksi di sini bertentangan dengan intuisi umum "praktik terbaik",
 > **file ini yang menang** — proyek ini memiliki kendala domain forensik yang tidak lazim.
 
@@ -105,6 +106,14 @@ dan laporan. DILARANG menyembunyikan, menghapus, atau "menyelesaikan" otomatis.
 ### 4.9 Render aman
 DILARANG `dangerouslySetInnerHTML`. Semua data user lolos escaping React bawaan.
 
+### 4.10 Security (SEC — CODE.md §15)
+- DILARANG: `dangerouslySetInnerHTML`, `eval`, `new Function`, `fetch` baru, inline handler.
+- Parameter URL & referensi antar-record = **internal UUID via selector** (K-2). Nomor bisnis
+  (`EV-0042`, `CASE-2025-014`) = display & pencarian only — dilarang jadi kunci akses/routing.
+- Schema impor backup wajib `.strict()`. CSP `connect-src 'none'` tidak boleh dilonggarkan.
+- IDOR/broken access control = N/A struktural di mode mvp (tanpa server) — JANGAN menambah
+  kontrol server-side yang tidak berlaku (auth header, CSRF token), JANGAN mengeklaimnya.
+
 ---
 
 ## 5. Kendala Platform — GitHub Pages static export
@@ -115,6 +124,14 @@ DILARANG `dangerouslySetInnerHTML`. Semua data user lolos escaping React bawaan.
   yang **wajib dibungkus `<Suspense>`** (else build gagal).
 - Semua link internal pakai `Link` atau path + query; jangan asumsikan URL path dinamis.
 - Ini agent sering "memperbaiki" ke route dinamis karena terasa lebih idiomatik — JANGAN.
+
+### Multi-environment (D-22)
+- Mode build via `VESTIGIUM_MODE` (`mvp` default | `production`). DILARANG mengubah logika mode
+  di `next.config.mjs` atau "menyederhanakannya" (CC-30).
+- Selama mode mvp: DILARANG membuat `app/api/**` — satu route saja mematahkan static export.
+- Storage key HANYA dari konstanta tunggal `lib/config.ts` (`vestigium_mvp_v1`) —
+  dilarang hardcode `localStorage` key di komponen/store lain.
+- DILARANG menyelesaikan dua environment dengan strategi dua branch.
 
 ---
 
