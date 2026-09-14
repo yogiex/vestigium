@@ -1,211 +1,154 @@
-/**
- * lib/domain.ts — State machine, transisi, konstanta domain
- * Ref: CC-20, FEATURE.md §4.5
- *
- * Transisi status hanya melalui tabel TRANSITIONS + canTransition().
- * DILARANG if-chain status tersebar.
- */
+/* ================================================================
+ * lib/domain.ts — aturan domain sebagai DATA (CC-20) + label UI (CC-13)
+ * Ref: DATA.md §4–5 · FR-M6-01 · ISO §4 taksonomi
+ * ================================================================ */
 
 import type {
-  CaseStatus,
-  ItemStatus,
-  CustodyAction,
-  SourceCategory,
-  PowerState,
-  AcquisitionMethod,
-  HashVerificationResult,
-} from "./types";
+  AcquisitionMethod, AcquisitionSource, AuditAction, CaseStatus, CustodyEventType, ImageFormat,
+  IncidentType, ItemStatus, Medium, Packaging, Party, PersonRole, PhysicalCondition,
+  PowerState, Priority, SealCondition, SourceCategory, VerificationMethod,
+  VerificationResult,
+} from './types';
 
-// ─── State Machine ───────────────────────────────────────────────────
+/* ---------- State machine ---------- */
+export const TRANSITIONS = {
+  item: {
+    'collected':    ['sealed', 'in-analysis'],
+    'sealed':       ['opened', 'in-analysis'],
+    'in-analysis':  ['sealed', 'released'],
+    'opened':       ['sealed', 'released'],
+    'released':     [],
+    'disposed':     [],
+  },
+  case: {
+    'open':   ['active'],
+    'active': ['closed'],
+    'closed': ['active'],
+  },
+} as const;
 
-/**
- * Tabel transisi status kasus.
- * Ref: FEATURE.md §4.5 — transisi sebagai tabel, bukan if-chain
- */
-export const CASE_TRANSITIONS: Record<CaseStatus, CaseStatus[]> = {
-  open: ["closed"],
-  closed: [], // kasus tidak bisa dibuka kembali
+export function canTransition(kind: 'item' | 'case', from: string, to: string): boolean {
+  return ((TRANSITIONS[kind] as Record<string, readonly string[]>)[from] ?? []).includes(to);
+}
+
+/* ---------- Kategori → medium default ---------- */
+export const CATEGORY_MEDIUM: Record<SourceCategory, Medium> = {
+  'workstation': 'physical', 'mobile-device': 'physical', 'removable-media': 'physical',
+  'memory': 'physical', 'optical-disc': 'physical', 'iot-other': 'physical',
+  'cloud-service': 'logical', 'system-log': 'logical',
+  'network-capture': 'logical', 'digital-document': 'logical',
 };
 
-/**
- * Tabel transisi status item evidence.
- */
-export const ITEM_TRANSITIONS: Record<ItemStatus, ItemStatus[]> = {
-  collected: ["sealed", "in-analysis"],
-  sealed: ["opened", "in-analysis"],
-  "in-analysis": ["sealed", "released"],
-  opened: ["sealed", "released"],
-  released: [], // item yang sudah released tidak bisa diubah
+/* ---------- Label UI ---------- */
+export const ITEM_STATUS_LABELS: Record<ItemStatus, string> = {
+  collected: 'Tercatat', sealed: 'Tersegel', 'in-analysis': 'Analisis',
+  opened: 'Seal Dibuka', released: 'Dirilis', disposed: 'Dimusnahkan',
+};
+export const CASE_STATUS_LABELS: Record<CaseStatus, string> = {
+  open: 'Open', active: 'Aktif', closed: 'Ditutup',
+};
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  high: 'Tinggi', medium: 'Sedang', low: 'Rendah',
+};
+export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  'unauthorized-access': 'Akses tidak sah', 'data-leak': 'Kebocoran data',
+  'digital-fraud': 'Penipuan digital', 'malware': 'Serangan malware',
+  'asset-misuse': 'Penyalahgunaan aset', 'internal-dispute': 'Sengketa internal',
+  'other': 'Lainnya',
+};
+export const SOURCE_CATEGORY_LABELS: Record<SourceCategory, string> = {
+  'workstation': 'Workstation / PC', 'mobile-device': 'Perangkat mobile',
+  'removable-media': 'Media lepas / USB', 'memory': 'Memori (RAM / dump)',
+  'optical-disc': 'Optical disc', 'cloud-service': 'Layanan cloud',
+  'system-log': 'Log & berkas sistem', 'network-capture': 'Capture jaringan',
+  'digital-document': 'Dokumen digital', 'iot-other': 'IoT / lainnya',
+};
+export const MEDIUM_LABELS: Record<Medium, string> = { physical: 'Fisik', logical: 'Logis' };
+export const POWER_STATE_LABELS: Record<PowerState, string> = { on: 'Menyala (ON)', off: 'Mati (OFF)' };
+export const CONDITION_LABELS: Record<PhysicalCondition, string> = {
+  intact: 'Utuh', damaged: 'Rusak', burned: 'Terbakar',
+  encrypted: 'Terenkripsi', other: 'Lainnya',
+};
+export const PACKAGING_LABELS: Record<Packaging, string> = {
+  'antistatic-bag': 'Antistatic bag', 'evidence-bag': 'Evidence bag',
+  'evidence-box': 'Evidence box', 'envelope': 'Amplop', 'none': 'Tanpa wadah (logis)',
+};
+export const CUSTODY_TYPE_LABELS: Record<CustodyEventType, string> = {
+  collected: 'Pemindangan', transferred: 'Transfer', sealed: 'Penyegelan',
+  opened: 'Seal dibuka', released: 'Rilis', resealed: 'Segel ulang',
+  disposed: 'Pemusnahan',
+};
+export const SEAL_CONDITION_LABELS: Record<SealCondition, string> = {
+  intact: 'Utuh', broken: 'Pecah', 'not-applicable': 'N/A',
+};
+export const ACQ_SOURCE_LABELS: Record<AcquisitionSource, string> = {
+  'non-volatile': 'Non-volatile (disk)', 'volatile': 'Volatile (RAM / live)',
+};
+export const ACQ_METHOD_LABELS: Record<AcquisitionMethod, string> = {
+  'bit-stream': 'Bit-stream image (fisik)', 'logical': 'Logical copy (logis)',
+  'targeted': 'Targeted collection', 'live': 'Live acquisition',
+};
+export const IMAGE_FORMAT_LABELS: Record<ImageFormat, string> = {
+  e01: 'E01', raw: 'RAW (dd)', aff4: 'AFF4', other: 'Lainnya',
+};
+export const VERIFY_METHOD_LABELS: Record<VerificationMethod, string> = {
+  'file-compute': 'Perhitungan berkas', 'manual-entry': 'Input manual',
+};
+export const VERIFY_RESULT_LABELS: Record<VerificationResult, string> = {
+  match: 'MATCH', mismatch: 'MISMATCH', unverified: 'Belum terverifikasi',
+};
+export const PERSON_ROLE_LABELS: Record<PersonRole, string> = {
+  defr: 'DEFR', des: 'DES', 'defr-manager': 'DEFR Manager',
+  'des-manager': 'DES Manager', investigator: 'Penyidik', other: 'Lainnya',
 };
 
-/**
- * Cek apakah transisi status valid.
- * Ref: CC-20 — canTransition() sebagai satu titik pengecekan
- */
-export function canTransition(
-  kind: "case" | "item",
-  from: CaseStatus | ItemStatus,
-  to: CaseStatus | ItemStatus
-): boolean {
-  if (kind === "case") {
-    return (CASE_TRANSITIONS[from as CaseStatus] || []).includes(to as CaseStatus);
+/* ---------- Helper Party ---------- */
+export function isSameParty(a: Party, b: Party): boolean {
+  if (a.kind !== b.kind) return false;
+  return a.kind === 'person' && b.kind === 'person'
+    ? a.personId === b.personId
+    : (a as { label: string }).label === (b as { label: string }).label;
+}
+
+export function partyLabel(p: Party, resolvePersonName: (id: string) => string): string {
+  switch (p.kind) {
+    case 'person': return resolvePersonName(p.personId);
+    case 'location': return p.label;
+    case 'external': return p.label;
   }
-  return (ITEM_TRANSITIONS[from as ItemStatus] || []).includes(to as ItemStatus);
 }
 
-/**
- * Dapatkan transisi yang valid dari status tertentu.
- */
-export function validTransitions(
-  kind: "case" | "item",
-  current: CaseStatus | ItemStatus
-): Array<CaseStatus | ItemStatus> {
-  const table = kind === "case" ? CASE_TRANSITIONS : ITEM_TRANSITIONS;
-  return table[current as keyof typeof table] || [];
-}
+/* ================================================================
+ * Policy RBAC — GRU-02 (SRS v0.3): role berwenang per aksi. Policy = DATA (CC-20).
+ * `satisfies` menjamin: aksi baru di AuditAction tanpa policy = gagal compile.
+ * ================================================================ */
 
-// ─── Konstanta ───────────────────────────────────────────────────────
+/** Aksi yang sah saat belum ada operator aktif (bootstrap first-run / pemulihan pasca-wipe).
+ *  IMPORT termasuk: database kosong tak punya roster — restore backup adalah jalur pemulihan (S5). */
+export const BOOTSTRAP_ACTIONS = ['PERSON_ADD', 'PERSON_UPDATE', 'SETTINGS', 'IMPORT'] as const;
 
-/**
- * Urutan volatilitas (order of volatility).
- * Ref: FEATURE.md §4.6, PRD FR-M3-03
- */
-export const VOLATILITY_ORDER = [
-  { key: "ramCaptured", label: "RAM (Memory)" },
-  { key: "runningProcesses", label: "Proses berjalan" },
-  { key: "networkConnections", label: "Koneksi jaringan" },
-  { key: "mountedDrives", label: "Drive terpasang" },
-  { key: "openFiles", label: "File terbuka" },
-  { key: "screenCapture", label: "Screenshot" },
-] as const;
+export const ACTION_ROLES = {
+  CASE_CREATE:        ['defr-manager', 'des-manager'],
+  CASE_STATUS:        ['defr-manager', 'des-manager'],
+  CASE_UPDATE:        ['defr', 'des', 'defr-manager', 'des-manager'],
+  EVIDENCE_REGISTER:  ['defr', 'defr-manager'],
+  CUSTODY:            ['defr', 'des', 'defr-manager', 'des-manager'],
+  ACQUISITION:        ['des', 'des-manager'],
+  VERIFY:             ['des', 'des-manager'],
+  HASH_REFERENCE:     ['des', 'des-manager'],
+  PERSON_ADD:         ['defr-manager', 'des-manager'],
+  PERSON_UPDATE:      ['defr-manager', 'des-manager'],
+  PERSON_DEACTIVATE:  ['defr-manager', 'des-manager'],
+  SETTINGS:           ['defr-manager', 'des-manager'],
+  EXPORT:             ['*'],
+  IMPORT:             ['defr-manager', 'des-manager'],
+  RESET_DEMO:         ['defr-manager', 'des-manager'],
+  WIPE:               ['defr-manager', 'des-manager'],
+  CHAIN_VERIFY:       ['*'],
+} as const satisfies Record<AuditAction, readonly (PersonRole | '*')[]>;
 
-/**
- * Ukuran chunk untuk hash streaming (8 MB).
- * Ref: DESIGN.md §8
- */
-export const HASH_CHUNK_SIZE = 8 * 1024 * 1024;
-
-/**
- * 10 kategori sumber evidence.
- * Ref: DATA.md §3
- */
-export const SOURCE_CATEGORIES: Array<{
-  value: SourceCategory;
-  label: string;
-}> = [
-  { value: "computer", label: "Komputer" },
-  { value: "mobile", label: "Mobile" },
-  { value: "removable", label: "Removable Media" },
-  { value: "network", label: "Network" },
-  { value: "cloud", label: "Cloud" },
-  { value: "iot", label: "IoT" },
-  { value: "photo", label: "Foto" },
-  { value: "audio", label: "Audio" },
-  { value: "document", label: "Dokumen" },
-  { value: "other", label: "Lainnya" },
-];
-
-/**
- * Status power state.
- */
-export const POWER_STATES: Array<{
-  value: PowerState;
-  label: string;
-  description: string;
-}> = [
-  { value: "on", label: "Menyala", description: "Perangkat dalam kondisi menyala" },
-  { value: "off", label: "Mati", description: "Perangkat dalam kondisi mati" },
-  { value: "unknown", label: "Tidak Diketahui", description: "Status power tidak dapat ditentukan" },
-];
-
-/**
- * Metode akuisisi.
- */
-export const ACQUISITION_METHODS: Array<{
-  value: AcquisitionMethod;
-  label: string;
-  requiresJustification: boolean;
-}> = [
-  { value: "bit-stream", label: "Bit-stream Copy", requiresJustification: false },
-  { value: "logical", label: "Logical Copy", requiresJustification: false },
-  { value: "live", label: "Live Acquisition", requiresJustification: true },
-];
-
-/**
- * Hasil verifikasi hash.
- */
-export const HASH_RESULTS: Array<{
-  value: HashVerificationResult;
-  label: string;
-  color: string;
-}> = [
-  { value: "match", label: "Cocok", color: "text-green-600" },
-  { value: "mismatch", label: "Tidak Cocok", color: "text-red-600" },
-  { value: "source-absent", label: "Hash Sumber Tidak Ada", color: "text-yellow-600" },
-  { value: "image-absent", label: "Hash Image Tidak Ada", color: "text-yellow-600" },
-];
-
-/**
- * Aksi custody.
- */
-export const CUSTODY_ACTIONS: Array<{
-  value: CustodyAction;
-  label: string;
-}> = [
-  { value: "collected", label: "Dikumpulkan" },
-  { value: "sealed", label: "Disegel" },
-  { value: "transferred", label: "Ditransfer" },
-  { value: "opened", label: "Dibuka" },
-  { value: "released", label: "Dirilis" },
-];
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-/**
- * Dapatkan label untuk source category.
- */
-export function getSourceLabel(category: SourceCategory): string {
-  return SOURCE_CATEGORIES.find((c) => c.value === category)?.label || category;
-}
-
-/**
- * Dapatkan label untuk power state.
- */
-export function getPowerStateLabel(state: PowerState): string {
-  return POWER_STATES.find((p) => p.value === state)?.label || state;
-}
-
-/**
- * Dapatkan label untuk acquisition method.
- */
-export function getAcquisitionLabel(method: AcquisitionMethod): string {
-  return ACQUISITION_METHODS.find((m) => m.value === method)?.label || method;
-}
-
-/**
- * Dapatkan warna untuk status item.
- */
-export function getItemStatusColor(status: ItemStatus): string {
-  const colors: Record<ItemStatus, string> = {
-    collected: "bg-blue-100 text-blue-800",
-    sealed: "bg-purple-100 text-purple-800",
-    opened: "bg-orange-100 text-orange-800",
-    "in-analysis": "bg-yellow-100 text-yellow-800",
-    released: "bg-green-100 text-green-800",
-  };
-  return colors[status] || "bg-gray-100 text-gray-800";
-}
-
-/**
- * Dapatkan label untuk status item.
- */
-export function getItemStatusLabel(status: ItemStatus): string {
-  const labels: Record<ItemStatus, string> = {
-    collected: "Dikumpulkan",
-    sealed: "Disegel",
-    opened: "Dibuka",
-    "in-analysis": "Dalam Analisis",
-    released: "Dirilis",
-  };
-  return labels[status] || status;
+export function canPerform(role: PersonRole | null, action: AuditAction): boolean {
+  const allowed = ACTION_ROLES[action] as readonly (PersonRole | '*')[];
+  if (allowed.includes('*')) return true;
+  return role !== null && (allowed as readonly PersonRole[]).includes(role);
 }

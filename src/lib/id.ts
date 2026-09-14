@@ -1,96 +1,49 @@
-/**
- * lib/id.ts — Generator ID unik Vestigium
- * Ref: CC-21, DATA.md §5
- *
- * Format:
- * - Case: CASE-YYYYMMDD-XXX (counter per hari)
- * - Evidence: EV-YYYYMMDD-XXX (counter per hari)
- * - Acquisition: AC-YYYYMMDD-XXX (counter per hari)
- * - UID: 12 karakter hex
- */
+/* ================================================================
+ * lib/id.ts — generator uid & nomor bisnis (DATA §6)
+ * Penomoran DERIVED dari array append-only — tanpa counters (DATA §12.5).
+ * View/handler DILARANG menyusun string ID manual (CC-21).
+ * ================================================================ */
 
-import { nowUTC } from "./time";
+import { currentYear } from './time';
+import {
+  asUuid, type AcquisitionNo, type AcquisitionRecord, type Case, type CaseNo,
+  type EvidenceItem, type EvidenceNo, type Uuid,
+} from './types';
 
-// ─── Counter State ───────────────────────────────────────────────────
-// Reset otomatis saat tanggal berubah
-let currentDate = "";
-let counters: Record<string, number> = {};
+const pad = (n: number, w: number) => String(n).padStart(w, '0');
 
-function getCounter(prefix: string): number {
-  const today = nowUTC().slice(0, 10); // "YYYY-MM-DD"
-  if (today !== currentDate) {
-    currentDate = today;
-    counters = {};
+/** Internal UUID — opaque, tak terenumerasi (SEC-06). */
+export function uid(): Uuid {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return asUuid(crypto.randomUUID());
   }
-  counters[prefix] = (counters[prefix] || 0) + 1;
-  return counters[prefix];
+  const b = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = b.map(x => x.toString(16).padStart(2, '0')).join('');
+  return asUuid(`${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`);
 }
 
-function padCounter(n: number): string {
-  return n.toString().padStart(3, "0");
+/** CASE-YYYY-NNN — NNN reset per tahun (D-07). */
+export function nextCaseNo(cases: readonly Case[], year: number = currentYear()): CaseNo {
+  const prefix = `CASE-${year}-`;
+  const max = cases
+    .filter(c => c.caseNo.startsWith(prefix))
+    .reduce((m, c) => Math.max(m, Number(c.caseNo.slice(prefix.length))), 0);
+  return `${prefix}${pad(max + 1, 3)}` as CaseNo;
 }
 
-function dateCompact(): string {
-  return nowUTC().slice(0, 10).replace(/-/g, ""); // "YYYYMMDD"
+/** EV-NNNN — global monoton seumur hidup database (D-08). */
+export function nextEvidenceNo(items: readonly EvidenceItem[]): EvidenceNo {
+  const max = items.reduce((m, it) => Math.max(m, Number(it.itemNo.slice(3))), 0);
+  return `EV-${pad(max + 1, 4)}` as EvidenceNo;
 }
 
-// ─── Generators ──────────────────────────────────────────────────────
-
-/**
- * Generate case number.
- * Format: CASE-YYYYMMDD-XXX
- */
-export function caseId(): string {
-  return `CASE-${dateCompact()}-${padCounter(getCounter("CASE"))}`;
-}
-
-/**
- * Generate evidence item number.
- * Format: EV-YYYYMMDD-XXX
- */
-export function evidenceId(): string {
-  return `EV-${dateCompact()}-${padCounter(getCounter("EV"))}`;
-}
-
-/**
- * Generate acquisition record number.
- * Format: AC-YYYYMMDD-XXX
- */
-export function acquisitionId(): string {
-  return `AC-${dateCompact()}-${padCounter(getCounter("AC"))}`;
-}
-
-/**
- * Generate unique ID (12 hex chars).
- * Untuk custody, verification, audit, dll.
- */
-export function uid(): string {
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/**
- * Generate DOC-ID untuk laporan cetak.
- * Format: DOC-YYYYMMDD-XXX
- */
-export function docId(): string {
-  return `DOC-${dateCompact()}-${padCounter(getCounter("DOC"))}`;
-}
-
-/**
- * Validasi format ID.
- */
-export function isValidCaseId(id: string): boolean {
-  return /^CASE-\d{8}-\d{3}$/.test(id);
-}
-
-export function isValidEvidenceId(id: string): boolean {
-  return /^EV-\d{8}-\d{3}$/.test(id);
-}
-
-export function isValidAcquisitionId(id: string): boolean {
-  return /^AC-\d{8}-\d{3}$/.test(id);
+/** AC-<evNo tanpa strip>-NN — dihitung dari milik item (id kini UUID — koreksi DATA §15.7). */
+export function nextAcquisitionNo(
+  acquisitions: readonly AcquisitionRecord[],
+  ev: EvidenceItem,
+): AcquisitionNo {
+  const count = acquisitions.filter(a => a.evidenceId === ev.id).length;
+  return `AC-${ev.itemNo.replace('-', '')}-${pad(count + 1, 2)}` as AcquisitionNo;
 }

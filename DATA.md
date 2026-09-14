@@ -1,6 +1,6 @@
 # DATA.md — Vestigium: Skema Data & Kontrak Validasi
 
-> **Versi:** 1.1 · **Status:** Baselined — acuan tunggal untuk `lib/types.ts` + `lib/schemas.ts`
+> **Versi:** 1.2 · **Status:** Baselined — acuan tunggal untuk `lib/types.ts` + `lib/schemas.ts`
 > **Aturan:** Kode yang menyimpang dari dokumen ini = bug. Perubahan skema wajib lewat revisi
 > dokumen ini + `schemaVersion` baru. Bila bertentangan dengan FEATURE.md → dijelaskan di §12.
 > **Stack:** TypeScript (strict, tanpa `any`) · zod · zustand persist → localStorage.
@@ -205,7 +205,8 @@ export type AcquisitionMethod = 'bit-stream' | 'logical' | 'targeted' | 'live';
 export type ImageFormat = 'e01' | 'raw' | 'aff4' | 'other';
 
 export interface AcquisitionRecord {
-  id: string;                // AC-EV0042-01 (§6) — sekaligus ID tampil
+  id: string;                // uid() internal (SEC-06) — koreksi v1.2
+  acquisitionNo: string;     // AC-EV0042-01 (§6) — display & pencarian (K-2)
   evidenceId: string;
   source: AcquisitionSource;
   method: AcquisitionMethod;
@@ -571,3 +572,416 @@ divergensi diam-diam; flag untuk changelog FEATURE.md v1.1:
 | `nextCaseNo/nextEvidenceNo/nextAcquisitionNo` — rollover tahun, max+1 | §6 |
 | `validateState` mendeteksi referensi menggantung | INV-02/03 |
 | Roundtrip ekspor→impor + migrasi registry | §9, S5 |
+
+---
+
+## 15. Skema Relasional L3 (Kontrak — bukan pekerjaan MVP, D-22)
+
+> **Satu model data, dua wujud penyimpanan.** Model = DATA.md §3 (JSON `camelCase`).
+> Yang berbeda hanya mesinnya: L1/MVP pakai dokumen JSON di localStorage; L3/Production
+> pakai PostgreSQL 15+, schema `vest`. Field `camelCase` → `snake_case` (pemetaan mekanis
+> Prisma/Drizzle). Dual timestamp dipertahankan: `occurred_at timestamptz` + `*_offset text`.
+
+### 15.1 ERD
+
+```
+┌────────┐ lead_defr ┌──────┐ 1     N ┌───────────────┐ 1     N ┌───────────────┐
+│ person │◀──────────│ case │────────▶│ evidence_item │────────▶│ custody_event │
+└───┬────┘           └──────┘ case_id └──────┬────────┘ evid_id └───────────────┘
+    │▲                                       │ 1
+    ││ witness/defr/des/operator/verifier    ├───N──▶┌────────────────────┐
+    ││ (party 'person' di custody)           │       │ acquisition_record │
+    └┴───────────────────────────────────────┘       └─────────┬──────────┘
+                                                    1 (opsional)│
+                                              ┌─────────────────▼─┐
+                                              │ verification (juga│
+                                              │ merujuk evidence) │
+                                              └───────────────────┘
+   GLOBAL: audit_event (hash-chained by seq) · settings (singleton, id=1)
+```
+
+Kardinalitas: `case 1—N evidence` · `evidence 1—N {custody, acquisition, verification}` ·
+`acquisition 0..1—N verification` (via `acquisition_id` opsional) ·
+`person` direferensikan semua event (INV-18: tak terhapus).
+
+### 15.2 DDL Lengkap — PostgreSQL
+
+```sql
+-- =====================================================================
+-- VESTIGIUM L3 — Skema Relasional (KONTRAK)
+-- Prinsip: (1) kolom = field JSON DATA.md §3 1:1  (2) setiap INV punya
+-- penegak DB  (3) append-only via PRIVILEGE  (4) dual timestamp =
+-- timestamptz (instan) + *_offset (zona asli dipertahankan, DATA §1)
+-- =====================================================================
+CREATE SCHEMA vest;
+
+-- ---------------- person (DATA §3.1) ----------------
+CREATE TABLE vest.person (
+  id            uuid        PRIMARY KEY,
+  name          text        NOT NULL,
+  role          text        NOT NULL CHECK (role IN
+                  ('defr','des','defr-manager','des-manager','investigator','other')),
+  organization  text        NOT NULL DEFAULT '',
+  credentials   text        NOT NULL DEFAULT '',
+  is_active     boolean     NOT NULL DEFAULT true,          -- deactivate-only (INV-18)
+  recorded_at   timestamptz NOT NULL DEFAULT now()
+);
+
+-- ---------------- case (DATA §3.2) ----------------
+CREATE TABLE vest.case (
+  id                   uuid        PRIMARY KEY,
+  case_no              text        NOT NULL UNIQUE
+                       CHECK (case_no ~ '^CASE-[0-9]{4}-[0-9]{3}$'),
+  title                text        NOT NULL,
+  incident_type        text        NOT NULL CHECK (incident_type IN
+                         ('unauthorized-access','data-leak','digital-fraud','malware',
+                          'asset-misuse','internal-dispute','other')),
+  priority             text        NOT NULL CHECK (priority IN ('high','medium','low')),
+  lead_defr_id         uuid        NOT NULL REFERENCES vest.person(id),
+  specialist_des_id    uuid            REFERENCES vest.person(id),
+  organization         text        NOT NULL DEFAULT '',
+  authorization_ref    text,
+  authorization_at     timestamptz,
+  authorization_offset text,
+  scope                text        NOT NULL DEFAULT '',
+  description          text        NOT NULL DEFAULT '',
+  status               text        NOT NULL DEFAULT 'open'
+                       CHECK (status IN ('open','active','closed')),
+  occurred_at          timestamptz NOT NULL,
+  occurred_offset      text        NOT NULL,
+  recorded_at          timestamptz NOT NULL DEFAULT now(),
+  closed_at            timestamptz,
+  closed_offset        text,
+  closed_reason        text,
+  CONSTRAINT case_closed_ck CHECK (                    -- INV-20
+    status <> 'closed' OR (closed_at IS NOT NULL AND closed_reason IS NOT NULL))
+);
+
+-- ---------------- evidence_item (DATA §3.3) ----------------
+CREATE TABLE vest.evidence_item (
+  id                  uuid        PRIMARY KEY,
+  item_no             text        NOT NULL UNIQUE
+                      CHECK (item_no ~ '^EV-[0-9]{4}$'),
+  case_id             uuid        NOT NULL REFERENCES vest.case(id),  -- INV-02
+  label               text        NOT NULL,
+  category            text        NOT NULL CHECK (category IN
+                        ('workstation','mobile-device','removable-media','memory',
+                         'optical-disc','cloud-service','system-log',
+                         'network-capture','digital-document','iot-other')),
+  medium              text        NOT NULL CHECK (medium IN ('physical','logical')),
+  brand text, model text, serial text,
+  capacity_bytes      bigint      CHECK (capacity_bytes IS NULL OR capacity_bytes > 0),
+  power_state         text        NOT NULL CHECK (power_state IN ('on','off')),
+  discovery_location  text        NOT NULL,
+  discovery_at        timestamptz, discovery_offset text,
+  condition           text        NOT NULL CHECK (condition IN
+                        ('intact','damaged','burned','encrypted','other')),
+  condition_notes     text,
+  collected_at        timestamptz NOT NULL,   -- ≡ occurredAt item (DATA §12.3)
+  collected_offset    text        NOT NULL,
+  defr_id             uuid        NOT NULL REFERENCES vest.person(id),
+  witness_id          uuid            REFERENCES vest.person(id),
+  packaging           text            CHECK (packaging IN
+                        ('antistatic-bag','evidence-bag','evidence-box',
+                         'envelope','none')),
+  seal_number         text,
+  screen_documented   boolean,        -- checklist volatile (dipiparkan dari JSON)
+  volatile_plan       boolean,
+  shutdown_recorded   boolean,
+  deviation_reason    text,           -- FR-M3-04
+  reference_hash      text            CHECK (reference_hash IS NULL
+                                        OR reference_hash ~ '^[0-9a-f]{64}$'),
+  reference_src_file  text,
+  reference_src_size  bigint,
+  reference_locked_at timestamptz,    -- INV-06: write-once → trigger
+  status              text        NOT NULL DEFAULT 'collected'
+                      CHECK (status IN ('collected','sealed','in-analysis',
+                                        'opened','released','disposed')),
+  notes               text,
+  recorded_at         timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT ev_physical_ck CHECK (                    -- INV-10
+    medium = 'logical' OR
+    (witness_id IS NOT NULL AND packaging IS NOT NULL AND packaging <> 'none'
+     AND seal_number IS NOT NULL)),
+  CONSTRAINT ev_volatile_ck CHECK (                    -- INV-11 (S2)
+    power_state = 'off' OR
+    (screen_documented IS TRUE AND volatile_plan IS TRUE AND shutdown_recorded IS TRUE)),
+  CONSTRAINT ev_cond_other_ck CHECK (condition <> 'other' OR condition_notes IS NOT NULL)
+);
+CREATE UNIQUE INDEX ev_seal_uk ON vest.evidence_item (seal_number)
+  WHERE seal_number IS NOT NULL;                        -- INV-05
+
+-- ---------------- custody_event (DATA §3.4) ----------------
+CREATE TABLE vest.custody_event (
+  id              uuid        PRIMARY KEY,
+  evidence_id     uuid        NOT NULL REFERENCES vest.evidence_item(id),  -- INV-03
+  type            text        NOT NULL CHECK (type IN
+                    ('collected','transferred','sealed','opened','released',
+                     'resealed','disposed')),
+  from_kind       text        NOT NULL CHECK (from_kind IN ('person','location','external')),
+  from_person_id  uuid            REFERENCES vest.person(id),
+  from_label      text,
+  to_kind         text        NOT NULL CHECK (to_kind IN ('person','location','external')),
+  to_person_id    uuid            REFERENCES vest.person(id),
+  to_label        text,
+  reason          text        NOT NULL,                                  -- FR-M6-02
+  seal_condition  text        NOT NULL CHECK (seal_condition IN
+                    ('intact','broken','not-applicable')),
+  seal_number     text,
+  recorded_by_id  uuid        NOT NULL REFERENCES vest.person(id),
+  notes           text,
+  occurred_at     timestamptz NOT NULL,
+  occurred_offset text        NOT NULL,
+  recorded_at     timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT party_from_ck CHECK (
+    (from_kind = 'person'  AND from_person_id IS NOT NULL AND from_label IS NULL) OR
+    (from_kind <> 'person' AND from_person_id IS NULL AND from_label IS NOT NULL)),
+  CONSTRAINT party_to_ck CHECK (
+    (to_kind = 'person'  AND to_person_id IS NOT NULL AND to_label IS NULL) OR
+    (to_kind <> 'person' AND to_person_id IS NULL AND to_label IS NOT NULL)),
+  CONSTRAINT from_ne_to_ck CHECK (                      -- INV-14
+    from_kind <> to_kind
+    OR (from_kind = 'person' AND from_person_id <> to_person_id)
+    OR (from_kind <> 'person' AND from_label <> to_label))
+);
+CREATE INDEX custody_ev_idx ON vest.custody_event (evidence_id, occurred_at DESC);
+
+-- ---------------- acquisition (DATA §3.5 — DENGAN KOREKSI §15.4) ----------------
+CREATE TABLE vest.acquisition (
+  id                   uuid        PRIMARY KEY,
+  acquisition_no       text        NOT NULL UNIQUE
+                       CHECK (acquisition_no ~ '^AC-EV[0-9]{4}-[0-9]{2}$'),
+  evidence_id          uuid        NOT NULL REFERENCES vest.evidence_item(id),
+  source               text        NOT NULL CHECK (source IN ('non-volatile','volatile')),
+  method               text        NOT NULL CHECK (method IN
+                         ('bit-stream','logical','targeted','live')),
+  tool                 text        NOT NULL,
+  write_blocker        text        NOT NULL,
+  output_format        text        NOT NULL CHECK (output_format IN ('e01','raw','aff4','other')),
+  output_file          text,
+  output_size          bigint,
+  target_media         text        NOT NULL,
+  started_at           timestamptz NOT NULL,
+  started_offset       text        NOT NULL,
+  finished_at          timestamptz NOT NULL,
+  finished_offset      text        NOT NULL,
+  operator_id          uuid        NOT NULL REFERENCES vest.person(id),
+  source_hash          text        CHECK (source_hash IS NULL OR source_hash ~ '^[0-9a-f]{64}$'),
+  image_hash           text        CHECK (image_hash IS NULL OR image_hash ~ '^[0-9a-f]{64}$'),
+  original_changed     boolean     NOT NULL,
+  change_justification text,
+  source_clock_notes   text,                            -- P-08/K-4
+  notes                text,
+  recorded_at          timestamptz NOT NULL DEFAULT now(),
+
+  CONSTRAINT acq_live_ck    CHECK (method <> 'live' OR original_changed),      -- INV-12
+  CONSTRAINT acq_justify_ck CHECK (NOT original_changed
+                                    OR change_justification IS NOT NULL),      -- INV-13
+  CONSTRAINT acq_times_ck   CHECK (finished_at >= started_at)                  -- INV-15
+);
+CREATE INDEX acq_ev_idx ON vest.acquisition (evidence_id);
+
+-- ---------------- verification (DATA §3.6) ----------------
+CREATE TABLE vest.verification (
+  id              uuid        PRIMARY KEY,
+  evidence_id     uuid        NOT NULL REFERENCES vest.evidence_item(id),
+  acquisition_id  uuid            REFERENCES vest.acquisition(id),  -- INV-03
+  method          text        NOT NULL CHECK (method IN ('file-compute','manual-entry')),
+  computed_hash   text        NOT NULL CHECK (computed_hash ~ '^[0-9a-f]{64}$'),
+  result          text        NOT NULL CHECK (result IN ('match','mismatch','unverified')),
+  verifier_id     uuid        NOT NULL REFERENCES vest.person(id),
+  notes           text,
+  occurred_at     timestamptz NOT NULL,
+  occurred_offset text        NOT NULL,
+  recorded_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX verif_ev_idx ON vest.verification (evidence_id, recorded_at DESC);
+
+-- ---------------- audit_event (DATA §3.7) — INSERT-only ----------------
+CREATE TABLE vest.audit_event (
+  seq        bigint      NOT NULL CHECK (seq >= 0),
+  id         uuid        NOT NULL UNIQUE,
+  at         timestamptz NOT NULL DEFAULT now(),
+  actor      text        NOT NULL,
+  action     text        NOT NULL CHECK (action IN
+               ('CASE_CREATE','CASE_STATUS','EVIDENCE_REGISTER','CUSTODY','ACQUISITION',
+                'VERIFY','HASH_REFERENCE','PERSON_ADD','PERSON_UPDATE',
+                'PERSON_DEACTIVATE','SETTINGS','EXPORT','IMPORT','RESET_DEMO',
+                'WIPE','CHAIN_VERIFY')),
+  target     text        NOT NULL,
+  detail     text        NOT NULL DEFAULT '',
+  prev_hash  text        NOT NULL CHECK (prev_hash ~ '^[0-9a-f]{64}$'),
+  hash       text        NOT NULL UNIQUE CHECK (hash ~ '^[0-9a-f]{64}$'),
+  PRIMARY KEY (seq)
+);
+CREATE INDEX audit_target_idx ON vest.audit_event (target);
+
+-- ---------------- settings (singleton) ----------------
+CREATE TABLE vest.settings (
+  id                  smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  org_name            text        NOT NULL DEFAULT '',
+  org_unit            text        NOT NULL DEFAULT '',
+  default_examiner_id uuid            REFERENCES vest.person(id),
+  recorded_at         timestamptz NOT NULL DEFAULT now()
+);
+
+-- ---------------- policy transisi status (CC-20) ----------------
+CREATE TABLE vest.status_transition (
+  entity      text NOT NULL CHECK (entity IN ('item','case')),
+  from_status text NOT NULL,
+  to_status   text NOT NULL,
+  PRIMARY KEY (entity, from_status, to_status)
+);
+INSERT INTO vest.status_transition VALUES
+  ('item','collected','sealed'),('item','collected','in-analysis'),
+  ('item','sealed','opened'),('item','sealed','in-analysis'),
+  ('item','in-analysis','sealed'),('item','in-analysis','released'),
+  ('item','opened','sealed'),('item','opened','released'),
+  ('case','open','active'),('case','active','closed'),('case','closed','active');
+```
+
+### 15.3 Trigger — Invarian Lintas-Baris
+
+```sql
+-- INV-09: evidence ditolak bila kasus belum berotorisasi (gerbang S6)
+CREATE FUNCTION vest.evidence_authz() RETURNS trigger AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM vest.case c
+                 WHERE c.id = NEW.case_id AND c.authorization_ref IS NOT NULL) THEN
+    RAISE EXCEPTION 'INV-09: kasus belum memiliki referensi otorisasi';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER evidence_authz_trg BEFORE INSERT ON vest.evidence_item
+  FOR EACH ROW EXECUTE FUNCTION vest.evidence_authz();
+
+-- INV-06: reference_hash write-once
+CREATE FUNCTION vest.refhash_write_once() RETURNS trigger AS $$
+BEGIN
+  IF OLD.reference_hash IS NOT NULL
+     AND NEW.reference_hash IS DISTINCT FROM OLD.reference_hash THEN
+    RAISE EXCEPTION 'INV-06: hash referensi write-once — anulasi via record baru';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER refhash_trg BEFORE UPDATE ON vest.evidence_item
+  FOR EACH ROW EXECUTE FUNCTION vest.refhash_write_once();
+
+-- Transisi status via tabel policy
+CREATE FUNCTION vest.check_transition() RETURNS trigger AS $$
+DECLARE entity text;
+BEGIN
+  entity := CASE TG_TABLE_NAME WHEN 'evidence_item' THEN 'item' ELSE 'case' END;
+  IF NEW.status = OLD.status THEN RETURN NEW; END IF;
+  IF NOT EXISTS (SELECT 1 FROM vest.status_transition t
+                 WHERE t.entity = entity
+                   AND t.from_status = OLD.status AND t.to_status = NEW.status) THEN
+    RAISE EXCEPTION 'INVARIANT: transisi % %→% ilegal', entity, OLD.status, NEW.status;
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER item_transition_trg BEFORE UPDATE OF status ON vest.evidence_item
+  FOR EACH ROW EXECUTE FUNCTION vest.check_transition();
+CREATE TRIGGER case_transition_trg BEFORE UPDATE OF status ON vest.case
+  FOR EACH ROW EXECUTE FUNCTION vest.check_transition();
+
+-- INV-16: konsistensi result vs hash acuan efektif
+CREATE FUNCTION vest.verif_consistent() RETURNS trigger AS $$
+DECLARE acuan text;
+BEGIN
+  SELECT COALESCE(a.image_hash, e.reference_hash) INTO acuan
+    FROM vest.evidence_item e
+    LEFT JOIN vest.acquisition a ON a.id = NEW.acquisition_id
+   WHERE e.id = NEW.evidence_id;
+  IF NEW.result = 'unverified' AND acuan IS NOT NULL THEN
+    RAISE EXCEPTION 'INV-16: unverified hanya bila belum ada hash acuan';
+  END IF;
+  IF acuan IS NOT NULL
+     AND NEW.result <> (CASE WHEN NEW.computed_hash = acuan THEN 'match'
+                             ELSE 'mismatch' END) THEN
+    RAISE EXCEPTION 'INV-16: result tidak konsisten dengan perbandingan hash';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+CREATE TRIGGER verif_trg BEFORE INSERT ON vest.verification
+  FOR EACH ROW EXECUTE FUNCTION vest.verif_consistent();
+```
+
+### 15.4 Privilege — Matriks Mutabilitas → GRANT
+
+```sql
+CREATE ROLE vest_app     LOGIN;   -- aplikasi
+CREATE ROLE vest_auditor LOGIN;   -- auditor: read-only
+CREATE ROLE vest_maint   LOGIN;   -- owner: migrasi saja
+
+GRANT USAGE ON SCHEMA vest TO vest_app, vest_auditor;
+
+-- person: NO DELETE (INV-18); update profil terbatas
+GRANT SELECT, INSERT ON vest.person TO vest_app;
+GRANT UPDATE (name, organization, credentials, is_active) ON vest.person TO vest_app;
+
+-- case: UPDATE hanya kolom mutable
+GRANT SELECT, INSERT ON vest.case TO vest_app;
+GRANT UPDATE (title, incident_type, priority, specialist_des_id, organization,
+              authorization_ref, authorization_at, scope, description, status,
+              closed_at, closed_reason) ON vest.case TO vest_app;
+
+-- evidence: UPDATE hanya status; hash write-once dijaga trigger
+GRANT SELECT, INSERT ON vest.evidence_item TO vest_app;
+GRANT UPDATE (status) ON vest.evidence_item TO vest_app;
+
+-- Append-only total (INV-01): INSERT+SELECT saja
+GRANT SELECT, INSERT ON vest.custody_event, vest.acquisition,
+                       vest.verification, vest.audit_event TO vest_app;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA vest TO vest_auditor;
+-- Yang tidak di-GRANT = tidak ada: DELETE di mana pun, TRUNCATE, DDL.
+```
+
+### 15.5 Pemetaan INV-01…20 → Penegak
+
+| INV | Penegak L1 (sekarang) | Penegak L3 (kontrak ini) |
+|---|---|---|
+| 01 append-only | tipe store (CC-16) | `GRANT INSERT,SELECT` saja |
+| 02, 03 referensi | zod + validateState | `REFERENCES` FK |
+| 04 custodian derived | selector | view/selector (tidak disimpan) |
+| 05 seal unik | zod refine saat tulis | partial unique index |
+| 06 hash write-once | gateway | trigger `refhash_trg` |
+| 07 format waktu | zod + branded type | `CHECK regex` + timestamptz |
+| 08 anomali waktu | form konfirmasi | (UI, bukan DB) |
+| 09 gerbang otorisasi | zod lintas-entitas | trigger `evidence_authz` |
+| 10 fisik lengkap | zod superRefine | `ev_physical_ck` |
+| 11 checklist volatile | zod superRefine (S2) | `ev_volatile_ck` |
+| 12, 13 live/justifikasi | zod | `acq_live_ck`, `acq_justify_ck` |
+| 14 from≠to | zod refine | `from_ne_to_ck` |
+| 15 waktu akuisisi | zod | `acq_times_ck` |
+| 16 konsistensi verifikasi | gateway | trigger `verif_consistent` |
+| 17 hash-chain | verifyChain (S4) | unique(seq,hash) + verify job |
+| 18 person tak terhapus | gateway | `GRANT` tanpa DELETE |
+| 19 mutasi→audit | gateway `commit()` | procedure + INSERT-only audit |
+| 20 closed lengkap | zod refine | `case_closed_ck` |
+
+### 15.6 L1 ↔ L3: Mapping & Migrasi
+
+- **Nama field**: JSON `camelCase` ↔ kolom `snake_case` — pemetaan mekanis (Prisma/Drizzle).
+- **Dual timestamp**: `occurredAt: "…+07:00"` → `occurred_at timestamptz` (instan) + `occurred_offset "+07:00"` (zona asli).
+- **Checklist volatile** (3 boolean JSON) → 3 kolom flat pada `evidence_item` (syarat INV-11 jadi CHECK satu baris).
+- **Jalur migrasi** = backup JSON (DATA §9.2 langkah 7) — L1 ekspor → L3 impor; `schemaVersion` dan chainTip ikut.
+- **Migrasi skema DB** = registry 1:1 dengan `schemaVersion`.
+
+### 15.7 Koreksi yang Ditemukan Skema Ini (v1.2)
+
+**AcquisitionRecord punya dua identitas yang tertukar.** DATA.md §3.5 menulis
+`id: "AC-EV0042-01"` (bisnis, dipakai sebagai ID tampil) sementara konvensi §1/SEC-06
+menetapkan ID internal = UUID opaque. Koreksi:
+
+```ts
+// lib/types.ts — AcquisitionRecord:
+id: Uuid;                       // internal UUID (SEC-06) — KONSISTEN dgn entitas lain
+acquisitionNo: AcquisitionNo;   // 'AC-EV0001-01' — display & pencarian (K-2)
+```
+
+Dampak: `id.ts → nextAcquisitionNo()` tetap; gateway meng-assign `id: uid()` +
+`acquisitionNo` terpisah. Ini persis tipe temuan yang murah sekarang, mahal di Sesi 6.

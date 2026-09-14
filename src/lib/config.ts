@@ -1,56 +1,26 @@
-/**
- * lib/config.ts — Konfigurasi Vestigium
- * Ref: DESIGN.md §9
- */
+/* ================================================================
+ * lib/config.ts — satu-satunya tempat membaca env & konstanta global
+ * Ref: D-22 · CC-30/32 · DATA.md §8 · FR-M10-05 · NFR-09
+ * ================================================================ */
 
-export const CONFIG = {
-  /**
-   * Nama aplikasi
-   */
-  appName: "Vestigium",
+export type VestMode = 'mvp' | 'production';
 
-  /**
-   * Versi aplikasi
-   */
-  version: "0.1.0",
+/** Mode build — default fail-safe = mvp (CC-30). */
+export const VEST_MODE: VestMode =
+  process.env.NEXT_PUBLIC_VESTIGIUM_MODE === 'production' ? 'production' : 'mvp';
 
-  /**
-   * Mode operasi
-   * - "mvp": 100% client-side, GitHub Pages
-   * - "production": backend + auth (L3)
-   */
-  mode: (process.env.NEXT_PUBLIC_VESTIGIUM_MODE || "mvp") as "mvp" | "production",
+/** Key namespaced per mode — dua mode di origin sama berbagi localStorage (D-22/K-2). */
+export const STORAGE_KEY = `vestigium_${VEST_MODE}_v1`;
 
-  /**
-   * Base path untuk GitHub Pages
-   */
-  basePath: "/vestigium",
+/** Harus cocok dengan basePath di next.config.ts (CC-30). */
+export const APP_BASE_PATH = '/vestigium';
 
-  /**
-   * Maximum file size untuk hash streaming (100 MB)
-   */
-  maxFileSize: 100 * 1024 * 1024,
+/** Versi skema data — TUNGGAL lintas mode; naikkan hanya via revisi DATA.md (§9). */
+export const SCHEMA_VERSION = 1 as const;
 
-  /**
-   * Chunk size untuk hash streaming (8 MB)
-   */
-  hashChunkSize: 8 * 1024 * 1024,
+/** Kuota localStorage ±5 MB; peringatan amber di 80% (FR-M10-05). */
+export const STORAGE_QUOTA_BYTES = 5 * 1024 * 1024;
+export const STORAGE_WARN_RATIO = 0.8;
 
-  /**
-   * Storage keys untuk localStorage
-   */
-  storageKeys: {
-    state: "vestigium:state",
-    settings: "vestigium:settings",
-  },
-
-  /**
-   * Format nomor
-   */
-  formats: {
-    caseNo: "CASE-YYYYMMDD-XXX",
-    evidenceNo: "EV-YYYYMMDD-XXX",
-    acquisitionNo: "AC-YYYYMMDD-XXX",
-    docId: "DOC-YYYYMMDD-XXX",
-  },
-} as const;
+/** Ambang anomali dual timestamp: occurred > recorded, atau jeda > 24 jam (INV-08, NFR-09). */
+export const TIMESTAMP_ANOMALY_MS = 24 * 60 * 60 * 1000;

@@ -1,167 +1,106 @@
-/**
- * store/selectors.ts — Selector untuk derived values
- * Ref: CC-22, FEATURE.md §4.4
- *
- * Derived value tidak disimpan; dihitung saat render.
- * DILARANG menyimpan field derived sebagai "untuk mempermudah".
- */
+/* ================================================================
+ * store/selectors.ts — satu-satunya sumber nilai TURUNAN (CC-18)
+ * Fungsi murni — komponen membungkus dengan useShallow. Dilarang
+ * menghitung nilai-nilai ini inline di JSX.
+ * ================================================================ */
 
-import type { VestigiumState, CustodyEvent, EvidenceItem } from "@/lib/types";
+import { chainTip, verifyChain } from '../lib/audit';
+import { STORAGE_QUOTA_BYTES, STORAGE_WARN_RATIO } from '../lib/config';
+import { partyLabel } from '../lib/domain';
+import { toMillis } from '../lib/time';
+import type {
+  AcquisitionRecord, Case, ChainReport, EvidenceItem, Party, Person,
+  VerificationRecord, VestigiumState,
+} from '../lib/types';
 
-type State = VestigiumState;
+export function selectActiveOperator(s: VestigiumState): Person | null {
+  return s.persons.find(p => p.id === s.settings.defaultExaminerId) ?? null;
+}
 
-// ─── Case Selectors ──────────────────────────────────────────────────
+export function selectPersonName(s: VestigiumState, id: string): string {
+  return s.persons.find(p => p.id === id)?.name ?? '(personel tidak dikenal)';
+}
 
-/**
- * Dapatkan kasus berdasarkan nomor.
- */
-export const getCaseByNo = (state: State, caseNo: string) =>
-  state.cases.find((c) => c.caseNo === caseNo);
+/** INV-04 — custodian = toParty event TERAKHIR (by occurredAt, bukan string compare — DATA §1). */
+export function selectCurrentCustodian(s: VestigiumState, evidenceId: string): Party | null {
+  const last = s.custody
+    .filter(c => c.evidenceId === evidenceId)
+    .sort((a, b) => toMillis(b.occurredAt) - toMillis(a.occurredAt))[0];
+  return last ? last.toParty : null;
+}
 
-/**
- * Dapatkan semua kasus aktif (status open).
- */
-export const getOpenCases = (state: State) =>
-  state.cases.filter((c) => c.status === "open");
+export function selectCustodianLabel(s: VestigiumState, evidenceId: string): string {
+  const p = selectCurrentCustodian(s, evidenceId);
+  return p ? partyLabel(p, id => selectPersonName(s, id)) : '—';
+}
 
-/**
- * Jumlah item dalam kasus.
- */
-export const getCaseItemCount = (state: State, caseNo: string) =>
-  state.evidenceItems.filter((e) => e.caseNo === caseNo).length;
+export function selectEvidenceOfCase(s: VestigiumState, caseId: string): EvidenceItem[] {
+  return s.evidence.filter(e => e.caseId === caseId);
+}
 
-// ─── Evidence Selectors ──────────────────────────────────────────────
+export function selectCaseOf(s: VestigiumState, evidenceId: string): Case | null {
+  const ev = s.evidence.find(e => e.id === evidenceId);
+  return ev ? s.cases.find(c => c.id === ev.caseId) ?? null : null;
+}
 
-/**
- * Dapatkan item evidence berdasarkan nomor.
- */
-export const getEvidenceByNo = (state: State, itemNo: string) =>
-  state.evidenceItems.find((e) => e.itemNo === itemNo);
+/** DATA §12.2 — matchStatus TIDAK disimpan; diturunkan dari dua hash yang tercatat. */
+export function selectMatchStatus(a: AcquisitionRecord): 'match' | 'mismatch' | 'unverified' {
+  if (!a.sourceHash || !a.imageHash) return 'unverified';
+  return a.sourceHash === a.imageHash ? 'match' : 'mismatch';
+}
 
-/**
- * Dapatkan semua item untuk kasus tertentu.
- */
-export const getEvidenceByCase = (state: State, caseNo: string) =>
-  state.evidenceItems.filter((e) => e.caseNo === caseNo);
+export function selectPrimaryAcquisition(s: VestigiumState, evidenceId: string): AcquisitionRecord | null {
+  const item = s.evidence.find(e => e.id === evidenceId);
+  if (!item?.referenceHash) return null;
+  return s.acquisitions
+    .filter(a => a.evidenceId === evidenceId && a.imageHash === item.referenceHash)[0] ?? null;
+}
 
-/**
- * Custodian saat ini (penerima custody event terakhir).
- * Ref: FEATURE.md §4.4 — custodian = penerima event terakhir, titik.
- */
-export const getCurrentCustodian = (state: State, itemNo: string): string | null => {
-  const lastTransfer = state.custody
-    .filter((c) => c.itemNo === itemNo && c.action === "transferred")
-    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0];
+export interface ItemIntegrity {
+  hasReference: boolean;
+  lastVerification: VerificationRecord | null;
+  status: 'match' | 'mismatch' | 'unverified';
+}
 
-  return lastTransfer?.to || null;
-};
+/** Status integritas item = verifikasi terakhir (by recordedAt) atas item/akuisisi primer. */
+export function selectItemIntegrity(s: VestigiumState, evidenceId: string): ItemIntegrity {
+  const item = s.evidence.find(e => e.id === evidenceId);
+  if (!item?.referenceHash) return { hasReference: false, lastVerification: null, status: 'unverified' };
+  const primary = selectPrimaryAcquisition(s, evidenceId);
+  const last = s.verifications
+    .filter(v => v.evidenceId === evidenceId
+      && (!v.acquisitionId || (primary !== null && v.acquisitionId === primary.id)))
+    .sort((a, b) => toMillis(b.recordedAt) - toMillis(a.recordedAt))[0];
+  return { hasReference: true, lastVerification: last ?? null, status: last?.result ?? 'unverified' };
+}
 
-/**
- * Status verifikasi terakhir untuk item.
- */
-export const getLastVerification = (state: State, itemNo: string) =>
-  state.verifications
-    .filter((v) => v.itemNo === itemNo)
-    .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())[0];
+/** S3 — integrity incident TIDAK PERNAH disembunyikan (FR-M5-05). */
+export function selectIntegrityIncidents(s: VestigiumState): { item: EvidenceItem; verification: VerificationRecord }[] {
+  return s.evidence
+    .map(item => ({ item, integrity: selectItemIntegrity(s, item.id) }))
+    .filter(x => x.integrity.status === 'mismatch' && x.integrity.lastVerification !== null)
+    .map(x => ({ item: x.item, verification: x.integrity.lastVerification as VerificationRecord }));
+}
 
-// ─── Collection Selectors ────────────────────────────────────────────
+export function selectVerificationProgress(s: VestigiumState):
+  { verified: number; withHash: number; total: number; percent: number } {
+  const withHash = s.evidence.filter(e => e.referenceHash).length;
+  const verified = s.evidence.filter(e => selectItemIntegrity(s, e.id).status === 'match').length;
+  return { verified, withHash, total: s.evidence.length,
+    percent: withHash > 0 ? Math.round((verified / withHash) * 100) : 0 };
+}
 
-/**
- * Dapatkan collection untuk item tertentu.
- */
-export const getCollectionByItem = (state: State, itemNo: string) =>
-  state.collections.find((c) => c.itemNo === itemNo);
+export function selectChainReport(s: VestigiumState): ChainReport {
+  return verifyChain(s.audit);
+}
 
-// ─── Acquisition Selectors ───────────────────────────────────────────
+export function selectChainTip(s: VestigiumState): string {
+  return chainTip(s.audit);
+}
 
-/**
- * Dapatkan semua akuisisi untuk item tertentu.
- */
-export const getAcquisitionsByItem = (state: State, itemNo: string) =>
-  state.acquisitions
-    .filter((a) => a.itemNo === itemNo)
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-
-/**
- * Hash referensi terakhir (untuk verifikasi).
- */
-export const getReferenceHash = (state: State, itemNo: string): string | null => {
-  const acquisitions = getAcquisitionsByItem(state, itemNo);
-  if (acquisitions.length === 0) return null;
-  return acquisitions[acquisitions.length - 1].imageHash;
-};
-
-// ─── Custody Selectors ───────────────────────────────────────────────
-
-/**
- * Riwayat custody untuk item tertentu.
- */
-export const getCustodyHistory = (state: State, itemNo: string): CustodyEvent[] =>
-  state.custody
-    .filter((c) => c.itemNo === itemNo)
-    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-
-/**
- * Total jumlah custody events.
- */
-export const getTotalCustodyEvents = (state: State) => state.custody.length;
-
-// ─── Audit Selectors ─────────────────────────────────────────────────
-
-/**
- * Audit chain tip (hash terakhir).
- */
-export const getAuditTip = (state: State): string => {
-  if (state.audit.length === 0) return "";
-  return state.audit[state.audit.length - 1].hash;
-};
-
-/**
- * Verifikasi integritas audit chain.
- */
-export const verifyAuditChain = (state: State): {
-  valid: boolean;
-  brokenAt?: number;
-} => {
-  for (let i = 1; i < state.audit.length; i++) {
-    const entry = state.audit[i];
-    const prev = state.audit[i - 1];
-    if (entry.prevHash !== prev.hash) {
-      return { valid: false, brokenAt: i };
-    }
-  }
-  return { valid: true };
-};
-
-// ─── Dashboard Selectors ─────────────────────────────────────────────
-
-/**
- * Statistik dashboard.
- */
-export const getDashboardStats = (state: State) => ({
-  totalCases: state.cases.length,
-  openCases: state.cases.filter((c) => c.status === "open").length,
-  totalEvidence: state.evidenceItems.length,
-  evidenceInAnalysis: state.evidenceItems.filter(
-    (e) => e.status === "in-analysis"
-  ).length,
-  totalCustodyEvents: state.custody.length,
-  auditEntries: state.audit.length,
-});
-
-/**
- * Evidence yang butuh verifikasi (sudah lebih dari 7 hari tanpa verifikasi).
- */
-export const getEvidenceNeedingVerification = (state: State): EvidenceItem[] => {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-  return state.evidenceItems.filter((item) => {
-    if (item.status === "released") return false;
-
-    const lastVerification = getLastVerification(state, item.itemNo);
-    if (!lastVerification) return true;
-
-    return new Date(lastVerification.at) < sevenDaysAgo;
-  });
-};
+/** FR-M10-05 — meter kuota; amber di 80% (NFR-08). */
+export function selectStorageUsage(s: VestigiumState): { bytes: number; ratio: number; warn: boolean } {
+  const bytes = new Blob([JSON.stringify(s)]).size;
+  const ratio = bytes / STORAGE_QUOTA_BYTES;
+  return { bytes, ratio, warn: ratio > STORAGE_WARN_RATIO };
+}
