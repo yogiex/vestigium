@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,16 +12,21 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, Upload, ShieldAlert, Trash2, UserPlus } from 'lucide-react';
+import { Download, MoreHorizontal, Pencil, Upload, ShieldAlert, Trash2, UserPlus } from 'lucide-react';
 
 import { AppShell } from '@/components/app/app-shell';
+import { PersonEditDialog } from '@/components/app/person-edit-dialog';
+import { RejectionList } from '@/components/domain/rejection-list';
 import { useOperatorGuard } from '@/hooks/use-operator-guard';
 import { canPerform, PERSON_ROLE_LABELS } from '@/lib/domain';
 import { formatUTC } from '@/lib/time';
-import { PERSON_ROLES, type Uuid } from '@/lib/types';
+import { PERSON_ROLES, type Person, type Uuid } from '@/lib/types';
 import { useVestigium, type Issue } from '@/store/use-vestigium';
 import { selectChainReport } from '@/store/selectors';
 import type { ChainReport } from '@/lib/types';
@@ -29,17 +34,6 @@ import type { ParsedBackup } from '@/lib/schemas';
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-widest text-muted-foreground';
 const TH = 'font-mono text-[10px] uppercase';
-
-function Issues({ issues }: { issues: Issue[] }) {
-  if (!issues.length) return null;
-  return (
-    <Alert variant="destructive" className="mt-3">
-      <AlertDescription className="text-xs">
-        {issues.map((i, k) => <p key={k}>{i.message}</p>)}
-      </AlertDescription>
-    </Alert>
-  );
-}
 
 const personForm = z.object({
   name: z.string().min(1, 'Nama wajib diisi — tampil di seluruh dokumen (FR-M7-04).'),
@@ -81,6 +75,13 @@ export function SettingsView() {
     setIssues([]);
     if (r.ok) setOkMsg(msg); else { setOkMsg(null); setIssues(r.issues); }
   };
+  const flash = (msg: string) => { setIssues([]); setOkMsg(msg); };
+
+  /* FR-M7-05 — dialog edit profil; di-mount ulang per personel via key (lihat render). */
+  const [editTarget, setEditTarget] = useState<Person | null>(null);
+
+  /* FR-M7 / INV-18 — nonaktifkan = satu-satunya "hapus" yang sah; konfirmasi L1 (D-16). */
+  const [deactivateTarget, setDeactivateTarget] = useState<Person | null>(null);
 
   /* --- Ekspor: Blob download — bukan request jaringan (§4.7) --- */
   const fileRef = useRef<HTMLInputElement>(null);
@@ -145,7 +146,7 @@ export function SettingsView() {
         </div>
 
         {okMsg && <Alert><AlertTitle className="text-sm">{okMsg}</AlertTitle></Alert>}
-        <Issues issues={issues} />
+        <RejectionList issues={issues} />
 
         {/* Operator aktif — subjek RBAC (GRU-04) */}
         <Card>
@@ -174,9 +175,9 @@ export function SettingsView() {
         {/* Roster — FR-M7 */}
         <Card>
           <CardHeader>
-            <CardTitle className="font-mono text-xs uppercase tracking-widest">Roster Personel</CardTitle>
+            <CardTitle className="font-mono text-xs uppercase tracking-widest">User &amp; Role Management</CardTitle>
             <CardDescription className="text-xs">
-              {canManage ? 'Tambah & nonaktifkan personel. Yang sudah terekam event tidak dapat dihapus (INV-18).'
+              {canManage ? 'Kelola personel & peran. Yang sudah terekam event tidak dapat dihapus — hanya dinonaktifkan (INV-18).'
                 : 'Mode baca — hanya manager yang berwenang mengelola roster (GRU-03).'}
             </CardDescription>
           </CardHeader>
@@ -185,8 +186,9 @@ export function SettingsView() {
               <TableHeader>
                 <TableRow>
                   <TableHead className={TH}>Nama</TableHead>
-                  <TableHead className={TH}>Email</TableHead>
-                  <TableHead className={TH}>Peran</TableHead>
+                  <TableHead className={TH}>Email (login)</TableHead>
+                  <TableHead className={TH}>Peran / Hak akses</TableHead>
+                  <TableHead className={TH}>Kredensial</TableHead>
                   <TableHead className={TH}>Status</TableHead>
                   {canManage && <TableHead />}
                 </TableRow>
@@ -194,22 +196,41 @@ export function SettingsView() {
               <TableBody>
                 {persons.map(p => (
                   <TableRow key={p.id}>
-                    <TableCell className="text-sm">{p.name}</TableCell>
+                    <TableCell className="text-sm font-medium">
+                      {p.name}
+                      {p.id === settings.defaultExaminerId && (
+                        <Badge className="ml-2 font-mono text-[8px] uppercase">operator aktif</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{p.email ?? '—'}</TableCell>
                     <TableCell><Badge variant="outline" className="font-mono text-[9px]">{PERSON_ROLE_LABELS[p.role]}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.credentials || '—'}</TableCell>
                     <TableCell>
                       <Badge variant={p.isActive ? 'default' : 'secondary'} className="font-mono text-[9px]">
                         {p.isActive ? 'AKTIF' : 'NONAKTIF'}
                       </Badge>
                     </TableCell>
                     {canManage && (
-                      <TableCell>
-                        {p.isActive && p.id !== settings.defaultExaminerId && (
-                          <Button variant="ghost" size="sm"
-                            onClick={() => report(st.deactivatePerson(p.id), `${p.name} dinonaktifkan.`)}>
-                            Nonaktifkan
-                          </Button>
-                        )}
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger
+                            render={<Button variant="ghost" size="icon-sm" disabled={!p.isActive}
+                              aria-label={`Aksi untuk ${p.name}`} />}>
+                            <MoreHorizontal className="size-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { setIssues([]); setOkMsg(null); setEditTarget(p); }}>
+                              <Pencil className="size-3.5" /> Edit profil / peran
+                            </DropdownMenuItem>
+                            {/* Self-lockout: operator aktif tak boleh menonaktifkan dirinya sendiri (D-16) */}
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              disabled={p.id === settings.defaultExaminerId}
+                              onClick={() => setDeactivateTarget(p)}>
+                              Nonaktifkan
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     )}
                   </TableRow>
@@ -353,6 +374,42 @@ export function SettingsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Nonaktifkan personel — konfirmasi L1 (D-16); INV-18: riwayat tetap utuh */}
+      <AlertDialog open={!!deactivateTarget} onOpenChange={o => { if (!o) setDeactivateTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">
+              Nonaktifkan {deactivateTarget?.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Akun tidak dapat lagi dipilih sebagai operator. Riwayat &amp; referensi di seluruh
+              event tetap utuh (INV-18) — ini satu-satunya &quot;hapus&quot; yang sah.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (deactivateTarget) {
+                report(st.deactivatePerson(deactivateTarget.id),
+                  `${deactivateTarget.name} dinonaktifkan — referensi historis tetap utuh.`);
+              }
+              setDeactivateTarget(null);
+            }}>Nonaktifkan</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* FR-M7-05 — koreksi profil; `key` memaksa nilai awal form segar per personel */}
+      {editTarget && (
+        <PersonEditDialog
+          key={editTarget.id}
+          person={editTarget}
+          open
+          onOpenChange={o => { if (!o) setEditTarget(null); }}
+          onSaved={flash}
+        />
+      )}
     </AppShell>
   );
 }

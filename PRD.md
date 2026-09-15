@@ -140,6 +140,7 @@ Legenda: 🏛 = **arsitektural** — jawaban mengubah struktur kode; ◻ = defau
 - **FR-M7-02** Semua referensi orang di form **WAJIB** dari roster (dropdown + pencarian + tambah-cepat inline); input nama bebas dinonaktifkan.
 - **FR-M7-03** Personel yang sudah direferensikan event **TIDAK BOLEH** dihapus — hanya dinonaktifkan.
 - **FR-M7-04** Nama tampil identik di seluruh UI dan dokumen cetak (satu sumber).
+- **FR-M7-05** Profil personel dapat **dikoreksi** (nama, email, peran, organisasi, kredensial) oleh manager; email tetap **unik lintas roster** (identitas gerbang login) di jalur tambah maupun edit, dan setiap perubahan peran ter-audit eksplisit (`PERSON_UPDATE`) — karena INV-18 melarang hapus, edit adalah satu-satunya jalur koreksi data orang.
 
 ### M8 — Audit Trail
 

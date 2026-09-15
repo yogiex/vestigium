@@ -263,3 +263,51 @@ describe('Append-only (INV-01) — perilaku array', () => {
     expect(lens).toEqual([1, 2, 3]);   // monoton — tidak pernah menyusut
   });
 });
+
+describe('FR-M7-05 — updatePerson: koreksi profil ter-audit (INV-18: hapus dilarang)', () => {
+  it('edit nama/email/peran lolos; audit mencatat perubahan peran eksplisit', () => {
+    seedOperator('defr-manager');
+    const add = useVestigium.getState().addPerson({ name: 'Lama', email: 'lama@x.id',
+      role: 'defr', organization: '', credentials: '', isActive: true });
+    if (!add.ok) throw new Error(JSON.stringify(add.issues));
+
+    const u = useVestigium.getState().updatePerson(add.data.id, {
+      name: 'Baru', email: 'baru@x.id', role: 'des' });
+    expect(u.ok).toBe(true);
+
+    const after = useVestigium.getState();
+    const p = after.persons.find(x => x.id === add.data.id);
+    expect(p?.name).toBe('Baru');
+    expect(p?.email).toBe('baru@x.id');
+    expect(p?.role).toBe('des');
+    expect(after.audit.at(-1)?.detail).toContain('Peran diubah: defr → des');
+    expect(verifyChain(after.audit).valid).toBe(true);
+  });
+
+  it('email ganda lintas personel ditolak; email sendiri diizinkan (tanpa perubahan)', () => {
+    seedOperator('defr-manager');
+    const a = useVestigium.getState().addPerson({ name: 'A', email: 'a@x.id', role: 'defr',
+      organization: '', credentials: '', isActive: true });
+    const b = useVestigium.getState().addPerson({ name: 'B', email: 'b@x.id', role: 'defr',
+      organization: '', credentials: '', isActive: true });
+    if (!a.ok || !b.ok) throw new Error('seed personel gagal');
+
+    const dup = useVestigium.getState().updatePerson(b.data.id, { email: 'a@x.id' });
+    expect(dup.ok).toBe(false);
+    if (!dup.ok) expect(dup.issues[0].path).toBe('email');
+
+    const self = useVestigium.getState().updatePerson(b.data.id, { email: 'b@x.id' });
+    expect(self.ok).toBe(true);
+  });
+
+  it('role tanpa wewenang ditolak + denial ter-audit (FR-M8-06)', () => {
+    const defr = seedOperator('defr');   // defr tidak berwenang PERSON_UPDATE (GRU-02)
+    const before = useVestigium.getState().audit.length;
+    const r = useVestigium.getState().updatePerson(defr, { name: 'X' });
+    expect(r.ok).toBe(false);
+    const after = useVestigium.getState();
+    expect(after.audit.length).toBe(before + 1);
+    expect(after.audit.at(-1)?.detail).toContain('DITOLAK');
+    expect(verifyChain(after.audit).valid).toBe(true);
+  });
+});

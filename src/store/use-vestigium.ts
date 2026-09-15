@@ -61,6 +61,8 @@ export type AcquisitionInput = Omit<AcquisitionRecord, 'id' | 'acquisitionNo' | 
 export type VerificationInput = Omit<VerificationRecord, 'id' | 'recordedAt' | 'occurredAt'> &
   { occurredAt: string };
 export type PersonInput = Omit<Person, 'id' | 'recordedAt'>;
+/** FR-M7-05 — koreksi profil; field yang tak dikirim dibiarkan apa adanya (bukan direset). */
+export type PersonPatch = Partial<Pick<Person, 'name' | 'email' | 'role' | 'organization' | 'credentials'>>;
 export type SettingsPatch = Partial<Pick<Settings, 'orgName' | 'orgUnit' | 'defaultExaminerId'>>;
 
 /* ---------- Fallback storage memori — SSR/prerender & lingkungan uji tanpa localStorage ---------- */
@@ -105,6 +107,7 @@ export interface VestigiumStore extends VestigiumState {
     source?: { fileName?: string; sizeBytes?: number }): ActionResult<EvidenceItem>; // INV-06 write-once
   /* Person & settings */
   addPerson(input: PersonInput): ActionResult<Person>;
+  updatePerson(personId: Uuid, patch: PersonPatch): ActionResult<Person>;  // FR-M7-05 koreksi profil
   deactivatePerson(personId: Uuid): ActionResult<Person>;   // INV-18: deactivate-only
   updateSettings(patch: SettingsPatch): ActionResult<Settings>;
   signOut(): void;
@@ -400,6 +403,42 @@ export const useVestigium = create<VestigiumStore>()(
           const data = Object.freeze(parsed.data) as Person;
           commit('PERSON_ADD', data.name, `Roster: ${data.role} — ${data.organization}`,
             st => ({ persons: [...st.persons, data] }));
+          return { ok: true, data };
+        },
+
+        /** FR-M7-05 — koreksi profil personel. INV-18 melarang hapus, jadi edit adalah
+         *  satu-satunya jalur koreksi. Perubahan peran mengubah hak akses berikutnya →
+         *  detail audit WAJIB eksplisit agar terbaca di trail (GRU). */
+        updatePerson: (personId, patch) => {
+          const s = get();
+          const p = s.persons.find(x => x.id === personId);
+          if (!p) return fail('Personel tidak ditemukan.');
+          const denied = guard(s, 'PERSON_UPDATE', p.name);
+          if (denied) return denied;
+
+          // Email = identitas gerbang login; roster satu sumber identitas (GRU) → unik & lowercase
+          const email = patch.email !== undefined ? patch.email.trim().toLowerCase() : p.email;
+          if (email && s.persons.some(x => x.id !== personId && x.email === email))
+            return fail(`Email "${email}" sudah terdaftar pada personel lain — roster adalah satu sumber identitas (GRU).`, 'email');
+
+          const merged = {
+            ...p,
+            name: (patch.name ?? p.name).trim(),
+            email,
+            role: patch.role ?? p.role,
+            organization: patch.organization !== undefined ? patch.organization.trim() : p.organization,
+            credentials: patch.credentials !== undefined ? patch.credentials.trim() : p.credentials,
+          };
+          const parsed = personSchema.safeParse(merged);
+          if (!parsed.success) return { ok: false, issues: toIssues(parsed.error) };
+          const data = Object.freeze(parsed.data) as Person;
+
+          const roleChanged = patch.role !== undefined && patch.role !== p.role;
+          const detail = roleChanged
+            ? `Peran diubah: ${p.role} → ${data.role} — hak akses berikutnya mengikuti peran baru (GRU)`
+            : `Profil diperbarui: ${Object.keys(patch).join(', ')}`;
+          commit('PERSON_UPDATE', data.name, detail,
+            st => ({ persons: st.persons.map(x => x.id === personId ? data : x) }));
           return { ok: true, data };
         },
 

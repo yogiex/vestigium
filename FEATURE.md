@@ -1,6 +1,6 @@
 # FEATURE.md — Vestigium (Digital Forensic Record System)
 
-> **Versi:** 1.4 · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
+> **Versi:** 1.5 · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
 > **Acuan domain:** ISO/IEC 27037:2012 — Identification · Collection · Acquisition · Preservation
 > **Dokumen turunan:** `PRD.md` (persyaratan FR/NFR) · `DATA.md` (skema) · `DESIGN.md` (UI/UX) · `CODE.md` (disiplin kode)
 > **Aturan dokumen:** Setiap fitur baru WAJIB masuk dokumen ini dulu sebelum diimplementasikan.
@@ -277,10 +277,13 @@ Konsistensi identitas orang di semua dokumen (mencegah typo yang merusak kredibi
 |---|---|
 | Roster: nama, peran (DEFR/DES/manager/penyidik/lainnya), organisasi, kredensial, status aktif | P0 |
 | Semua referensi orang dari roster (combobox + tambah-cepat inline); input bebas dinonaktifkan | P0 |
+| Koreksi profil (nama/email/peran/organisasi/kredensial) — email unik lintas roster; perubahan peran ter-audit eksplisit (`PERSON_UPDATE`) | P0 |
 | Gating peran (manager menyetujui deviasi) | P1 |
 | Identitas lintas perangkat via merge impor | P2 |
 
-**Aturan:** personel yang sudah direferensikan event tidak bisa dihapus — hanya dinonaktifkan.
+**Aturan:** personel yang sudah direferensikan event tidak bisa dihapus — hanya dinonaktifkan
+(INV-18). Koreksi data orang = edit profil, bukan hapus; operator aktif tidak bisa menonaktifkan
+dirinya sendiri (cegah self-lockout).
 
 ### M8 — Audit Trail
 Mematahkan **A6** — "log Anda bisa diedit, kan?"
@@ -409,7 +412,7 @@ adopsi lembaga eksternal / multi-tenant (P-15; jalurnya L3).
 
 | Dokumen | Status |
 |---|---|
-| FEATURE.md (ini) | ✅ 1.4 Baselined |
+| FEATURE.md (ini) | ✅ 1.5 Baselined |
 | PRD.md | ✅ 0.2 — D-01…D-22 baselined |
 | DATA.md | ✅ 1.1 — skema + zod contract + secure import |
 | DESIGN.md | ✅ 0.2 — multi-environment, UUID param |
@@ -431,3 +434,4 @@ Keputusan terbuka: **—** (semua D-01…D-22 & K-1…K-6 baselined).
 | 1.2 | D-13 diimplementasikan: seed demo via login (`seedDemo`, akun persona `@vestigium.demo` tanpa password) — jalur "mulai kosong" tetap default, FR-M10-04 tersedia lewat gerbang RBAC `RESET_DEMO` |
 | 1.3 | Norma lebar konten (DESIGN §5): shell **fluid** — `w-full` tanpa `mx-auto max-w-*`, jarak hanya dari padding `<main>`; kertas A4 tetap `max-w-[860px] mx-auto` (revisi keputusan PO atas usulan cap-terpusat) |
 | 1.4 | Persona demo: tokoh era Heian (Michinaga/Shōnagon/Seimei/Raikō/Takamura; subjek kasus: Masakado) — homase naratif, kontrak peran & skema tidak berubah |
+| 1.5 | User & Role Management lengkap (FR-M7-05): koreksi profil via aksi `PERSON_UPDATE` — email unik lintas roster di jalur tambah & edit, perubahan peran ter-audit eksplisit, edit = jalur koreksi karena INV-18 melarang hapus; proteksi self-lockout (operator aktif tak dapat dinonaktifkan) |
