@@ -95,10 +95,10 @@ Lengkap di [FEATURE.md §4](FEATURE.md).
 
 Seluruh kontrak desain sudah final dan dapat ditinjau (lihat [Peta Dokumentasi](#-peta-dokumentasi)).
 Implementasi MVP mengikuti urutan di [DESIGN.md §11](DESIGN.md). Demo live di
-GitHub Pages akan tertaut di sini setelah rilis pertama:
+GitHub Pages (rilis pertama):
 
 ```
-🔗 Demo: https://yogiex.github.io/vestigium/   (segera)
+🔗 Demo: https://yogiex.github.io/vestigium/
 ```
 
 ## Teknologi
