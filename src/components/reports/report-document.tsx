@@ -44,7 +44,7 @@ export function ReportDocument({ data, custodyRows, picName, docId, generatedAt,
   return (
     <article className="mx-auto w-full max-w-[860px] bg-background p-10 text-foreground shadow-lg sm:p-14 print:p-0">
       {/* Kop + hazard band — DESIGN §3.3 */}
-      <div className="mb-5 h-1 bg-[repeating-linear-gradient(-45deg,var(--color-amber-500)_0_8px,#111_8px_16px)]" />
+      <div className="mb-5 h-1 hazard-band" />
       <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
         {c.organization || 'Unit Forensik Digital'}
       </div>

@@ -120,7 +120,9 @@ function EvidenceDetailInner() {
   const [ver, setVer] = useState({ method: 'manual-entry', computedHash: '', result: 'match', acquisitionId: '' });
 
   const item = useVestigium(s => s.evidence.find(e => e.id === evidenceId));
-  const store = useVestigium.getState();
+  // Subscribe state penuh (pola dashboard) — bukan getState() di render: pembacaan
+  // turunan (kasus, integritas, timeline) harus ikut segar setelah aksi/roster berubah.
+  const g = useVestigium(s => s);
 
   const A = {
     transferCustody: useVestigium(s => s.transferCustody),
@@ -145,7 +147,6 @@ function EvidenceDetailInner() {
     );
   }
 
-  const g = store;
   const kase = selectCaseOf(g, item.id);
   const integrity = selectItemIntegrity(g, item.id);
   const acquisitions = selectAcquisitionsOfItem(g, item.id);

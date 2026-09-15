@@ -30,7 +30,6 @@ function formatDelta(ms: number): { text: string; anomali: boolean } {
   return { text: `⚠ ${Math.floor(h / 24)} hari`, anomali: true };
 }
 
-/** Warna badge aksi — makna konsisten dengan dashboard (default=prosedur). */
 const TYPE_VARIANT: Record<CustodyEventType, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   collected: 'outline', transferred: 'default', sealed: 'default',
   opened: 'secondary', released: 'secondary', resealed: 'default', disposed: 'destructive',
@@ -40,31 +39,30 @@ export function CustodyView() {
   const { mounted, operator } = useOperatorGuard();
   const router = useRouter();
 
-  const evidence = useVestigium(s => s.evidence);
-  const custodyCount = useVestigium(s => s.custody.length);
+  /* CC-26 — subscribe penuh; selector murni dihitung dari st (CC-18).
+     Sebelumnya: dua useMemo dgn getState() + deps parsial → nama personel
+     berubah, ledger basi. Kini deps [st, …] lengkap. */
+  const st = useVestigium(s => s);
 
   const [q, setQ] = useState('');
   const [fType, setFType] = useState('all');
   const [asc, setAsc] = useState(false);
 
-  /* Read-only ledger — selector murni dihitung dari state (CC-18/26) */
   const rows = useMemo(() => {
-    const all = selectCustodyLedger(useVestigium.getState());
     const dir = asc ? 1 : -1;
-    return all
+    return selectCustodyLedger(st)
       .sort((a, b) => dir * (Date.parse(a.event.occurredAt) - Date.parse(b.event.occurredAt)))
       .filter(r => fType === 'all' || r.event.type === fType)
       .filter(r => !q ||
         `${r.itemNo} ${r.itemLabel} ${r.fromLabel} ${r.toLabel} ${r.event.reason} ${r.event.sealNumber ?? ''}`
           .toLowerCase().includes(q.toLowerCase()));
-  }, [evidence, custodyCount, q, fType, asc]);
+  }, [st, q, fType, asc]);
 
-  const continuity = useMemo(
-    () => selectCustodyContinuity(useVestigium.getState()),
-    [evidence, custodyCount]);
+  const continuity = useMemo(() => selectCustodyContinuity(st), [st]);
 
-  const transfers = useVestigium(s => s.custody.filter(c => c.type === 'transferred').length);
-  const seals = useVestigium(s => s.custody.filter(c => c.type === 'sealed').length);
+  const custodyCount = st.custody.length;
+  const transfers = st.custody.filter(c => c.type === 'transferred').length;
+  const seals = st.custody.filter(c => c.type === 'sealed').length;
 
   if (!mounted || !operator) return <div className="min-h-screen bg-background" />;
 
@@ -76,7 +74,6 @@ export function CustodyView() {
           <h1 className="text-2xl font-semibold tracking-tight">Rantai Pemegangan Bukti</h1>
         </div>
 
-        {/* Note-strip — identitas halaman (§6.5) */}
         <div className="flex items-start gap-2.5 rounded-sm border border-primary/40 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
           <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
           <span>
@@ -95,13 +92,11 @@ export function CustodyView() {
             <AlertDescription className="text-xs">
               {continuity.broken.map(b =>
                 `${b.itemNo} (peristiwa pertama: ${CUSTODY_TYPE_LABELS[b.firstType as CustodyEventType] ?? b.firstType})`).join(' · ')}
-              <br />Setiap rantai wajib berawal event <b>collected</b> — FR-M3-01. Jika ini hasil
-              manipulasi storage, verifikasi rantai audit (modul 06) akan mengkonfirmasinya.
+              <br />Setiap rantai wajib berawal event <b>collected</b> — FR-M3-01.
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Statistik ringkas */}
         <div className="grid gap-4 sm:grid-cols-3">
           {[
             ['Total peristiwa', String(custodyCount)],
@@ -117,10 +112,10 @@ export function CustodyView() {
           ))}
         </div>
 
-        {/* Toolbar */}
         <div className="flex flex-wrap gap-3">
           <Input placeholder="Cari item / pihak / alasan / seal…" value={q}
             onChange={e => setQ(e.target.value)} className="max-w-xs" />
+          {/* base-ui Select memberi string | null — guard wajib utk tipe state string */}
           <Select value={fType} onValueChange={v => setFType(v ?? 'all')}>
             <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -135,7 +130,6 @@ export function CustodyView() {
           </Button>
         </div>
 
-        {/* Ledger */}
         <Card>
           <CardContent className="p-0">
             <Table>
@@ -155,7 +149,7 @@ export function CustodyView() {
                   <TableRow>
                     <TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">
                       {custodyCount === 0
-                        ? 'Belum ada peristiwa custody — rantai lahir otomatis saat registrasi evidence (FR-M3-01).'
+                        ? 'Belum ada peristiwa — rantai lahir otomatis saat registrasi evidence (FR-M3-01).'
                         : 'Tidak ada peristiwa yang cocok dengan filter.'}
                     </TableCell>
                   </TableRow>
@@ -202,7 +196,7 @@ export function CustodyView() {
 
         <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
           Custodian saat ini diturunkan dari peristiwa terakhir (INV-04) ·
-          {' '}custody form dengan kolom tanda tangan menyusul di modul Laporan (Sesi 9)
+          {' '}custody form dengan kolom tanda tangan menyusul di modul Laporan (P1)
         </p>
       </div>
     </AppShell>

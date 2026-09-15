@@ -27,8 +27,6 @@ const NAV = [
   { href: '/settings', label: 'Pengaturan',    icon: Settings },
 ] as const;
 
-const HAZARD = 'bg-[repeating-linear-gradient(-45deg,var(--color-amber-500)_0_8px,#111_8px_16px)]';
-
 /** Jam UTC tampilan — pengecualian tertutup §6; sumber waktu tetap lib/time (§4.3). */
 function UtcClock() {
   const [now, setNow] = useState('--:--:--');
@@ -101,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="flex h-14 items-center justify-between border-b bg-card px-4 print:hidden lg:px-6">
           <div className="flex items-center gap-3">
             {/* hazard band — DESIGN §3.3: hanya di sini & kop laporan */}
-            <span className={`hidden h-1 w-16 sm:block ${HAZARD}`} />
+            <span className="hidden h-1 w-16 hazard-band sm:block" />
             <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
               Vesti<span className="text-primary">gium</span>
             </span>

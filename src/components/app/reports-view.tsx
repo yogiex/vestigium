@@ -18,7 +18,10 @@ import { selectCaseReport, selectPersonName } from '@/store/selectors';
 function Inner() {
   const { mounted, operator } = useOperatorGuard();
   const sp = useSearchParams();
-  const cases = useVestigium(s => s.cases);
+  // Subscribe state penuh (pola dashboard) — wajib di ATAS early-return (rules-of-hooks);
+  // bukan getState() di render agar nama pihak/turunan ikut segar setelah roster berubah.
+  const st = useVestigium(s => s);
+  const cases = st.cases;
   const [caseId, setCaseId] = useState<string>(sp.get('case') ?? '');
 
   // DOC-ID & waktu dibangkitkan SEKALI per mount — stabil saat dicetak (FR-M9-04)
@@ -26,7 +29,7 @@ function Inner() {
 
   if (!mounted || !operator) return <div className="min-h-screen bg-background" />;
 
-  const g = useVestigium.getState();
+  const g = st;
   const active = caseId || cases[0]?.id || '';
   const data = active ? selectCaseReport(g, active) : null;
 

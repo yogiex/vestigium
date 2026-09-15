@@ -12,16 +12,21 @@ import { Download, Fingerprint, Lock } from 'lucide-react';
 
 import { AppShell } from '@/components/app/app-shell';
 import { useOperatorGuard } from '@/hooks/use-operator-guard';
-import { formatUTC } from '@/lib/time';
 import { toAuditCsv } from '@/lib/format';
+import { formatUTC } from '@/lib/time';
 import { AUDIT_ACTIONS } from '@/lib/types';
 import { useVestigium } from '@/store/use-vestigium';
 import { selectChainReport } from '@/store/selectors';
 
 export function AuditView() {
   const { mounted, operator } = useOperatorGuard();
-  const audit = useVestigium(s => s.audit);
-  const chain = useMemo(() => selectChainReport(useVestigium.getState()), [audit]);
+
+  /* CC-26 — view read-only subscribe state penuh; turunan via selector (CC-18).
+     Sebelumnya: selectChainReport(getState()) dalam useMemo dgn deps parsial
+     → memo bisa menghitung dari state basi. Kini deps lengkap. */
+  const st = useVestigium(s => s);
+  const audit = st.audit;
+  const chain = useMemo(() => selectChainReport(st), [st]);
 
   const [q, setQ] = useState('');
   const [fAction, setFAction] = useState('all');
@@ -68,6 +73,7 @@ export function AuditView() {
           </span>
         </div>
 
+        {/* Hasil verifikasi — dilokalisasi (S4) */}
         {chainPanel && (
           <Alert className={chain.valid ? 'border-success/40' : 'border-destructive/40'}>
             <AlertTitle className="text-sm">
@@ -82,6 +88,7 @@ export function AuditView() {
         <div className="flex flex-wrap gap-3">
           <Input placeholder="Cari aktor / target / detail…" value={q}
             onChange={e => setQ(e.target.value)} className="max-w-xs" />
+          {/* base-ui Select memberi string | null — guard wajib utk tipe state string */}
           <Select value={fAction} onValueChange={v => setFAction(v ?? 'all')}>
             <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
             <SelectContent>
