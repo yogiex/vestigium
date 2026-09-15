@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typegen": "next typegen",
+    "pretypecheck": "next typegen",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
