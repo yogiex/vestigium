@@ -9,8 +9,8 @@ import { STORAGE_QUOTA_BYTES, STORAGE_WARN_RATIO } from '../lib/config';
 import { partyLabel } from '../lib/domain';
 import { toMillis } from '../lib/time';
 import type {
-  AcquisitionRecord, Case, ChainReport, EvidenceItem, Party, Person,
-  VerificationRecord, VestigiumState,
+  AcquisitionRecord, Case, ChainReport, CustodyEvent,
+  EvidenceItem, Party, Person, VerificationRecord, VestigiumState,
 } from '../lib/types';
 
 export function selectActiveOperator(s: VestigiumState): Person | null {
@@ -103,4 +103,61 @@ export function selectStorageUsage(s: VestigiumState): { bytes: number; ratio: n
   const bytes = new Blob([JSON.stringify(s)]).size;
   const ratio = bytes / STORAGE_QUOTA_BYTES;
   return { bytes, ratio, warn: ratio > STORAGE_WARN_RATIO };
+}
+
+/* ---------- Custody ledger (Sesi 7) ---------- */
+
+export interface CustodyLedgerRow {
+  event: CustodyEvent;
+  evidenceId: string;
+  itemNo: string;
+  itemLabel: string;
+  caseNo: string | null;
+  fromLabel: string;
+  toLabel: string;
+  /** Δ recorded − occurred (dual timestamp selalu terlihat — konstitusi #2). */
+  deltaMs: number;
+}
+
+/** Ledger global, kronologis (occurredAt desc — pembandingan via toMillis, DATA §1). */
+export function selectCustodyLedger(s: VestigiumState): CustodyLedgerRow[] {
+  return [...s.custody]
+    .sort((a, b) => toMillis(b.occurredAt) - toMillis(a.occurredAt))
+    .map(ev => {
+      const item = s.evidence.find(e => e.id === ev.evidenceId);
+      const kase = item ? s.cases.find(c => c.id === item.caseId) : null;
+      return {
+        event: ev,
+        evidenceId: ev.evidenceId,
+        itemNo: item?.itemNo ?? '(?)',
+        itemLabel: item?.label ?? '(item tidak ditemukan — INV-03 dilanggar)',
+        caseNo: kase?.caseNo ?? null,
+        fromLabel: partyLabel(ev.fromParty, id => selectPersonName(s, id)),
+        toLabel: partyLabel(ev.toParty, id => selectPersonName(s, id)),
+        deltaMs: toMillis(ev.recordedAt) - toMillis(ev.occurredAt),
+      };
+    });
+}
+
+/**
+ * Gap-check kontinuitas (M6, P1 awal): setiap rantai HARUS dimulai event
+ * 'collected' (FR-M3-01). Rantai yang tidak berawal dari lokasi kejadian =
+ * pelanggaran yang TAMPIL, bukan disembunyikan (konstitusi #8, S3).
+ */
+export function selectCustodyContinuity(s: VestigiumState): {
+  ok: boolean;
+  broken: { itemNo: string; label: string; firstType: string }[];
+} {
+  const broken = s.evidence
+    .map(item => {
+      const events = s.custody.filter(c => c.evidenceId === item.id);
+      if (events.length === 0) return null;
+      const earliest = events.reduce((a, b) =>
+        toMillis(a.occurredAt) <= toMillis(b.occurredAt) ? a : b);
+      return earliest.type === 'collected'
+        ? null
+        : { itemNo: item.itemNo, label: item.label, firstType: earliest.type };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+  return { ok: broken.length === 0, broken };
 }
