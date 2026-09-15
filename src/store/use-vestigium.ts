@@ -17,6 +17,7 @@ import type { ZodError } from 'zod';
 
 import { chainTip, makeAuditEntry, verifyChain } from '../lib/audit';
 import { SCHEMA_VERSION, STORAGE_KEY } from '../lib/config';
+import { buildDemoState } from '../lib/demo';
 import {
   BOOTSTRAP_ACTIONS, canPerform, canTransition, partyLabel,
 } from '../lib/domain';
@@ -112,6 +113,7 @@ export interface VestigiumStore extends VestigiumState {
   parseBackup(raw: unknown): { ok: true; backup: ParsedBackup; chainReport: ChainReport }
                            | { ok: false; issues: Issue[] };
   applyBackup(raw: unknown): ActionResult<VestigiumState>;
+  seedDemo(): ActionResult<VestigiumState>;   // D-13/FR-M10-04 — prototipe
   wipeAll(): ActionResult<null>;
   /* Uji — reset state penuh (jangan dipakai di UI) */
   __resetForTests(seed?: Partial<VestigiumState>): void;
@@ -492,6 +494,20 @@ export const useVestigium = create<VestigiumStore>()(
           return { ok: true, data: next };
         },
 
+        /** Muat data demo (D-13). First-run: bebas; setelah ada data: manager-only
+         *  (selaras IMPORT/WIPE). Rantai audit VALID by construction (buildDemoState). */
+        seedDemo: () => {
+          const s = get();
+          const hasData = s.persons.length > 0 || s.cases.length > 0 || s.audit.length > 0;
+          if (hasData) {
+            const denied = guard(s, 'RESET_DEMO', 'demo');
+            if (denied) return denied;
+          }
+          const next = buildDemoState();
+          set(next);
+          return { ok: true, data: next };
+        },
+
         wipeAll: () => {
           const s = get();
           const denied = guard(s, 'WIPE', 'system');
@@ -506,7 +522,16 @@ export const useVestigium = create<VestigiumStore>()(
           return { ok: true, data: null };
         },
 
-        __resetForTests: (seed) => set({ ...emptyState(), ...seed }),
+        /* SEC: API uji tidak boleh hidup di build produksi — dari konsol ia bisa
+           membangun ulang state dari genesis sehingga rantai tampak VALID (menutup S4).
+           WAJIB merge (tanpa argumen `true`): emptyState() hanya data, sedangkan action
+           store hidup di state yang sama — replace akan menghapus seluruh action. */
+        __resetForTests: (seed) => {
+          if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'development') {
+            throw new Error('INVARIANT: __resetForTests hanya untuk lingkungan uji (SEC)');
+          }
+          set({ ...emptyState(), ...seed });
+        },
       };
     },
     {
