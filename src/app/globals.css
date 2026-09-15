@@ -4,6 +4,20 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ================================================================
+   VESTIGIUM — Design Tokens (DESIGN.md §3)
+   :root = tema gelap charcoal+amber (BUKAN default terang shadcn).
+   light-paper = tema kertas untuk laporan & @media print (print-parity M9).
+   Catatan: <html> sengaja TIDAK memakai class "dark" — token gelap hidup di
+   :root, sehingga UI tak bergantung pada toggling class yang mudah lupa.
+   ================================================================ */
+
+/* Pita hazard — HANYA di AppShell header, login, & kop laporan (DESIGN §3.3) */
+@utility hazard-band {
+  background: repeating-linear-gradient(
+    -45deg, var(--color-amber-500) 0 11px, #101010 11px 22px);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -27,6 +41,9 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -39,82 +56,99 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) + 8px);
+  --radius-2xl: calc(var(--radius) + 12px);
+  --radius-3xl: calc(var(--radius) + 16px);
+  --radius-4xl: calc(var(--radius) + 20px);
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: hsl(240 9% 4%);
+  --foreground: hsl(40 20% 96%);
+  --card: hsl(240 6% 7%);
+  --card-foreground: hsl(40 20% 96%);
+  --popover: hsl(240 7% 8%);
+  --popover-foreground: hsl(40 20% 96%);
+  --sidebar: hsl(240 7% 6%);
+  --sidebar-foreground: hsl(40 20% 96%);
+  --sidebar-accent: hsl(240 5% 11%);
+  --sidebar-accent-foreground: hsl(40 20% 96%);
+  --sidebar-primary: hsl(40 87% 55%);
+  --sidebar-primary-foreground: hsl(40 70% 8%);
+  --sidebar-border: hsl(240 5% 13%);
+  --sidebar-ring: hsl(40 87% 55%);
+
+  --primary: hsl(40 87% 55%);
+  --primary-foreground: hsl(40 70% 8%);
+  --secondary: hsl(240 5% 14%);
+  --secondary-foreground: hsl(40 20% 96%);
+  --muted: hsl(240 5% 12%);
+  --muted-foreground: hsl(240 5% 62%);
+  --accent: hsl(240 5% 12%);
+  --accent-foreground: hsl(40 20% 96%);
+  --destructive: hsl(4 68% 58%);
+  --destructive-foreground: hsl(40 20% 96%);
+  --success: hsl(152 58% 48%);
+  --success-foreground: hsl(152 60% 8%);
+  --border: hsl(240 5% 14%);
+  --input: hsl(240 5% 16%);
+  --ring: hsl(40 87% 55%);
+  --radius: 0.25rem;
+
+  --chart-1: hsl(40 87% 55%);
+  --chart-2: hsl(152 58% 48%);
+  --chart-3: hsl(4 68% 58%);
+  --chart-4: hsl(240 5% 62%);
+  --chart-5: hsl(40 60% 35%);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Tema kertas — komponen laporan (print-parity, M9) */
+.light-paper {
+  --background: hsl(40 30% 97%);
+  --foreground: hsl(240 10% 10%);
+  --card: hsl(40 25% 99%);
+  --card-foreground: hsl(240 10% 10%);
+  --popover: hsl(40 25% 99%);
+  --popover-foreground: hsl(240 10% 10%);
+  --primary: hsl(40 80% 38%);
+  --primary-foreground: hsl(40 30% 97%);
+  --secondary: hsl(40 15% 90%);
+  --secondary-foreground: hsl(240 10% 20%);
+  --muted: hsl(40 15% 92%);
+  --muted-foreground: hsl(240 6% 40%);
+  --accent: hsl(40 20% 93%);
+  --accent-foreground: hsl(240 10% 12%);
+  --destructive: hsl(0 65% 42%);
+  --destructive-foreground: hsl(40 30% 97%);
+  --success: hsl(152 65% 28%);
+  --success-foreground: hsl(40 30% 97%);
+  --border: hsl(40 10% 84%);
+  --input: hsl(40 10% 84%);
+  --ring: hsl(40 80% 38%);
+}
+
+@media print {
+  :root {
+    --background: hsl(40 30% 97%);
+    --foreground: hsl(240 10% 10%);
+    --card: hsl(40 25% 99%);
+    --card-foreground: hsl(240 10% 10%);
+    --primary: hsl(40 80% 38%);
+    --primary-foreground: hsl(40 30% 97%);
+    --muted-foreground: hsl(240 6% 40%);
+    --border: hsl(40 10% 84%);
+    --destructive: hsl(0 65% 42%);
+    --success: hsl(152 65% 28%);
+  }
+  body { background: white !important; }
+}
+
+::selection {
+  background: var(--primary);
+  color: hsl(40 70% 8%);
 }
 
 @layer base {
