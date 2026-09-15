@@ -80,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-card print:hidden md:flex">
         <div className="border-b px-5 py-4">
           <div className="text-lg font-bold tracking-tight text-foreground">
             VESTI<span className="text-primary">GIUM</span>
@@ -98,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b bg-card px-4 lg:px-6">
+        <header className="flex h-14 items-center justify-between border-b bg-card px-4 print:hidden lg:px-6">
           <div className="flex items-center gap-3">
             {/* hazard band — DESIGN §3.3: hanya di sini & kop laporan */}
             <span className={`hidden h-1 w-16 sm:block ${HAZARD}`} />
@@ -121,7 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="border-b bg-card px-4 py-2 md:hidden">
+        <div className="border-b bg-card px-4 py-2 print:hidden md:hidden">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger render={<Button variant="outline" size="sm" />}>
               <Menu className="size-4" /> Menu
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </SheetContent>
           </Sheet>
         </div>
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 print:p-0 lg:p-8">{children}</main>
       </div>
     </div>
   );

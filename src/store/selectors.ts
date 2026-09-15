@@ -10,7 +10,7 @@ import { partyLabel } from '../lib/domain';
 import { toMillis } from '../lib/time';
 import type {
   AcquisitionRecord, Case, ChainReport, CustodyEvent,
-  EvidenceItem, Party, Person, VerificationRecord, VestigiumState,
+  EvidenceItem, HashHex64, Party, Person, UTCString, VerificationRecord, VestigiumState,
 } from '../lib/types';
 
 export function selectActiveOperator(s: VestigiumState): Person | null {
@@ -160,4 +160,65 @@ export function selectCustodyContinuity(s: VestigiumState): {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
   return { ok: broken.length === 0, broken };
+}
+
+/* ---------- Riwayat per item (Sesi 6) — CC-18: dilarang filter inline di JSX ---------- */
+
+export function selectAcquisitionsOfItem(s: VestigiumState, evidenceId: string): AcquisitionRecord[] {
+  return s.acquisitions
+    .filter(a => a.evidenceId === evidenceId)
+    .sort((a, b) => toMillis(b.recordedAt) - toMillis(a.recordedAt));
+}
+
+export function selectVerificationsOfItem(s: VestigiumState, evidenceId: string): VerificationRecord[] {
+  return s.verifications
+    .filter(v => v.evidenceId === evidenceId)
+    .sort((a, b) => toMillis(b.recordedAt) - toMillis(a.recordedAt));
+}
+
+export function selectCustodyEventsOfItem(s: VestigiumState, evidenceId: string): CustodyEvent[] {
+  return s.custody
+    .filter(c => c.evidenceId === evidenceId)
+    .sort((a, b) => toMillis(a.occurredAt) - toMillis(b.occurredAt)); // kronologis utk timeline
+}
+
+/* ---------- Laporan kasus (Sesi 9, M9) — agregasi murni, CC-18/26 ---------- */
+
+export interface CaseReportData {
+  kase: Case;
+  items: EvidenceItem[];
+  custody: Record<string, CustodyEvent[]>;
+  acquisitions: Record<string, AcquisitionRecord[]>;
+  integrity: Record<string, ItemIntegrity>;
+  incidents: { itemNo: string; at: UTCString; hash: HashHex64 }[];
+  chainTipHex: string;
+  totals: { custodyEvents: number; acquisitions: number; verifications: number };
+}
+
+export function selectCaseReport(s: VestigiumState, caseId: string): CaseReportData | null {
+  const kase = s.cases.find(c => c.id === caseId);
+  if (!kase) return null;
+  const items = s.evidence
+    .filter(e => e.caseId === caseId)
+    .sort((a, b) => a.itemNo.localeCompare(b.itemNo));
+  const custody: CaseReportData['custody'] = {};
+  const acquisitions: CaseReportData['acquisitions'] = {};
+  const integrity: CaseReportData['integrity'] = {};
+  let cN = 0, aN = 0, vN = 0;
+  for (const it of items) {
+    const c = selectCustodyEventsOfItem(s, it.id);
+    const a = selectAcquisitionsOfItem(s, it.id);
+    const v = selectVerificationsOfItem(s, it.id);
+    custody[it.id] = c; acquisitions[it.id] = a; integrity[it.id] = selectItemIntegrity(s, it.id);
+    cN += c.length; aN += a.length; vN += v.length;
+  }
+  const incidents = selectIntegrityIncidents(s)
+    .filter(x => x.item.caseId === caseId)
+    .map(x => ({ itemNo: x.item.itemNo, at: x.verification.recordedAt,
+                 hash: x.verification.computedHash }));
+  return {
+    kase, items, custody, acquisitions, integrity, incidents,
+    chainTipHex: chainTip(s.audit),
+    totals: { custodyEvents: cN, acquisitions: aN, verifications: vN },
+  };
 }

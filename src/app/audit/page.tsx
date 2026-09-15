@@ -1,5 +1,9 @@
-import { ModulePlaceholder } from '@/components/app/module-placeholder';
+import type { Metadata } from 'next';
+
+import { AuditView } from '@/components/app/audit-view';
+
+export const metadata: Metadata = { title: 'Audit Trail — Vestigium' };
 
 export default function AuditPage() {
-  return <ModulePlaceholder no="06" title="Audit Trail" sesi={9} />;
+  return <AuditView />;
 }

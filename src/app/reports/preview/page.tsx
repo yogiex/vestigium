@@ -1,5 +1,9 @@
-import { ModulePlaceholder } from '@/components/app/module-placeholder';
+import type { Metadata } from 'next';
 
-export default function ReportPreviewPage() {
-  return <ModulePlaceholder no="09" title="Laporan" sesi={9} />;
+import { ReportsView } from '@/components/app/reports-view';
+
+export const metadata: Metadata = { title: 'Laporan Kasus — Vestigium' };
+
+export default function ReportsPage() {
+  return <ReportsView />;
 }
