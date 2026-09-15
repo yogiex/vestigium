@@ -138,7 +138,7 @@ export function SettingsView() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="w-full space-y-6">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">07 / Pengaturan</p>
           <h1 className="text-2xl font-semibold tracking-tight">Pengaturan Sistem</h1>
@@ -229,7 +229,7 @@ export function SettingsView() {
               })} className="grid gap-3 border-t pt-4 sm:grid-cols-2">
                 <div className="space-y-1">
                   <label htmlFor="p-name" className={LABEL}>Nama *</label>
-                  <Input id="p-name" placeholder="mis. A. Ramadhan, DEFR" {...form.register('name')} />
+                  <Input id="p-name" placeholder="mis. Sei Shōnagon, DEFR" {...form.register('name')} />
                   {form.formState.errors.name && <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>}
                 </div>
                 <div className="space-y-1">

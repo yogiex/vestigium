@@ -5,6 +5,11 @@
  * gerbang login tetap email-matching (README Model Kepercayaan, GRU-01).
  * Dibangun lewat rantai audit asli, bukan data tempelan — sehingga demo
  * memperlihatkan sistem yang "sudah dipakai" (INV-17 tetap terjaga).
+ *
+ * Persona = tokoh era Heian (homase naratif, BUKAN klaim historis):
+ *   Michinaga = manager · Sei Shōnagon = DEFR · Abe no Seimei = DES ·
+ *   Raikō = penyidik (demo RBAC) · Takamura = saksi · Masakado = subjek kasus.
+ * Kontrak peran/skema tidak berubah — hanya nama tampilan.
  * ================================================================ */
 
 import { makeAuditEntry } from './audit';
@@ -37,40 +42,41 @@ export const DEMO_IDS = {
 
 /** Ditampilkan di layar login saat data demo terpasang (tanpa password — gerbang identitas). */
 export const DEMO_ACCOUNTS = [
-  { email: 'manager@vestigium.demo', role: 'DES Manager — akses penuh' },
-  { email: 'defr@vestigium.demo', role: 'DEFR — kasus & evidence' },
-  { email: 'des@vestigium.demo', role: 'DES — akuisisi & verifikasi' },
-  { email: 'investigator@vestigium.demo', role: 'Penyidik — banyak aksi ditolak (demo RBAC)' },
+  { email: 'manager@vestigium.demo', role: 'Fujiwara no Michinaga · DES Manager — akses penuh' },
+  { email: 'defr@vestigium.demo', role: 'Sei Shōnagon · DEFR — kasus & evidence' },
+  { email: 'des@vestigium.demo', role: 'Abe no Seimei · DES — akuisisi & verifikasi' },
+  { email: 'investigator@vestigium.demo', role: 'Minamoto no Raikō · Penyidik — banyak aksi ditolak (demo RBAC)' },
 ] as const;
 
-const ACTOR = 'S. Pratama, DES';
-const ORG = 'PT Nusantara Data — Unit Forensik Digital';
+const ACTOR = 'Fujiwara no Michinaga';
+const ORG = 'Onmyōryō — Heian Digital Forensics Bureau';
 
 export function buildDemoState(): VestigiumState {
   const persons: Person[] = [
     { id: DEMO_IDS.manager as Uuid, name: ACTOR, email: 'manager@vestigium.demo', role: 'des-manager',
       organization: ORG, credentials: 'DES, CHFI', isActive: true, recordedAt: utc('2025-03-01T02:00:00Z') },
-    { id: DEMO_IDS.defr as Uuid, name: 'A. Ramadhan, DEFR', email: 'defr@vestigium.demo', role: 'defr',
+    { id: DEMO_IDS.defr as Uuid, name: 'Sei Shōnagon', email: 'defr@vestigium.demo', role: 'defr',
       organization: ORG, credentials: 'DEFR', isActive: true, recordedAt: utc('2025-03-01T02:01:00Z') },
-    { id: DEMO_IDS.des as Uuid, name: 'R. Maharani, DES', email: 'des@vestigium.demo', role: 'des',
+    { id: DEMO_IDS.des as Uuid, name: 'Abe no Seimei', email: 'des@vestigium.demo', role: 'des',
       organization: ORG, credentials: 'DES', isActive: true, recordedAt: utc('2025-03-01T02:02:00Z') },
-    { id: DEMO_IDS.investigator as Uuid, name: 'Budi Santoso', email: 'investigator@vestigium.demo',
+    { id: DEMO_IDS.investigator as Uuid, name: 'Minamoto no Raikō', email: 'investigator@vestigium.demo',
       role: 'investigator', organization: ORG, credentials: '—', isActive: true,
       recordedAt: utc('2025-03-01T02:03:00Z') },
-    { id: DEMO_IDS.witness as Uuid, name: 'Citra Dewi (saksi internal)', role: 'other',
+    { id: DEMO_IDS.witness as Uuid, name: 'Ono no Takamura (saksi internal)', role: 'other',
       organization: ORG, credentials: '—', isActive: true, recordedAt: utc('2025-03-01T02:04:00Z') },
   ];
 
   const kase: Case = {
     id: DEMO_IDS.case as Uuid, caseNo: 'CASE-2025-001' as CaseNo,
-    title: 'Dugaan akses tidak sah pada server HRD-01',
+    title: 'Dugaan akses tidak sah — kredensial atas nama Taira no Masakado',
     incidentType: 'unauthorized-access', priority: 'high',
     leadDefrId: DEMO_IDS.defr as Uuid, specialistDesId: DEMO_IDS.des as Uuid,
     organization: ORG, authorizationRef: 'ST/DF/011/2025',
     authorizationDate: offset('2025-03-10T09:00:00+07:00'),
     // FR-M1-03 — otorisasi terisi agar collection lolos gerbang INV-09
     scope: 'Server HRD-01, media penyimpanan & memori terkait',
-    description: 'Login anomali di luar jam kerja dari IP tidak dikenal. Diminta akuisisi disk & RAM untuk rekonstruksi aktivitas.',
+    description: 'Login anomali di luar jam kerja dikaitkan dengan kredensial Taira no Masakado '
+      + '(akun lama yang semestinya sudah dinonaktifkan). Diminta akuisisi disk & RAM untuk rekonstruksi aktivitas.',
     status: 'active',
     occurredAt: offset('2025-03-12T08:00:00+07:00'), recordedAt: utc('2025-03-12T01:05:00Z'),
   };
@@ -133,7 +139,7 @@ export function buildDemoState(): VestigiumState {
   };
 
   const settings: Settings = {
-    orgName: 'PT Nusantara Data', orgUnit: 'Unit Forensik Digital',
+    orgName: 'Heian Forensics Bureau', orgUnit: 'Onmyōryō · Divisi Forensik Digital',
     defaultExaminerId: DEMO_IDS.manager as Uuid,
     recordedAt: utc('2025-03-01T02:00:00Z'),
   };
@@ -144,15 +150,15 @@ export function buildDemoState(): VestigiumState {
     void audit.push(makeAuditEntry(audit, { action, target, detail, actor: ACTOR, at }));
 
   add('PERSON_ADD', ACTOR, 'Roster: des-manager (akun demo)', '2025-03-01T02:00:05Z');
-  add('PERSON_ADD', 'A. Ramadhan, DEFR', 'Roster: defr (akun demo)', '2025-03-01T02:01:05Z');
-  add('PERSON_ADD', 'R. Maharani, DES', 'Roster: des (akun demo)', '2025-03-01T02:02:05Z');
-  add('PERSON_ADD', 'Budi Santoso', 'Roster: investigator (akun demo RBAC)', '2025-03-01T02:03:05Z');
-  add('PERSON_ADD', 'Citra Dewi', 'Roster: saksi internal', '2025-03-01T02:04:05Z');
-  add('SETTINGS', 'settings', 'Operator aktif: S. Pratama, DES · identitas unit demo', '2025-03-01T02:05:00Z');
-  add('CASE_CREATE', kase.caseNo, `${kase.title} · PIC A. Ramadhan, DEFR`, '2025-03-12T01:05:10Z');
+  add('PERSON_ADD', 'Sei Shōnagon', 'Roster: defr (akun demo)', '2025-03-01T02:01:05Z');
+  add('PERSON_ADD', 'Abe no Seimei', 'Roster: des (akun demo)', '2025-03-01T02:02:05Z');
+  add('PERSON_ADD', 'Minamoto no Raikō', 'Roster: investigator (akun demo RBAC)', '2025-03-01T02:03:05Z');
+  add('PERSON_ADD', 'Ono no Takamura', 'Roster: saksi internal', '2025-03-01T02:04:05Z');
+  add('SETTINGS', 'settings', 'Operator aktif: Fujiwara no Michinaga · identitas unit demo (Onmyōryō)', '2025-03-01T02:05:00Z');
+  add('CASE_CREATE', kase.caseNo, `${kase.title} · PIC Sei Shōnagon`, '2025-03-12T01:05:10Z');
   add('EVIDENCE_REGISTER', ev.itemNo, `${ev.label} → ${kase.caseNo} (OFF)`, '2025-03-13T02:16:10Z');
-  add('CUSTODY', ev.itemNo, 'Pemindangan: Rak server lt. 3 → A. Ramadhan, DEFR', '2025-03-13T02:16:20Z');
-  add('CUSTODY', ev.itemNo, 'Transfer: A. Ramadhan, DEFR → R. Maharani, DES — imaging & analisis', '2025-03-14T02:35:10Z');
+  add('CUSTODY', ev.itemNo, 'Pemindangan: Rak server lt. 3 → Sei Shōnagon', '2025-03-13T02:16:20Z');
+  add('CUSTODY', ev.itemNo, 'Transfer: Sei Shōnagon → Abe no Seimei — imaging & analisis', '2025-03-14T02:35:10Z');
   add('ACQUISITION', ev.itemNo, 'AC-EV0001-01 · bit-stream · FTK Imager 4.7.0 · hash MATCH', '2025-03-14T05:31:10Z');
   add('HASH_REFERENCE', ev.itemNo, 'Hash referensi ditetapkan dari "HRD-01.E01" — TERKUNCI (INV-06)', '2025-03-16T01:10:05Z');
   add('VERIFY', ev.itemNo, 'Verifikasi file-compute: MATCH', '2025-03-16T01:10:15Z');

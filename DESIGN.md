@@ -219,6 +219,11 @@ Aturan keras:
 - `UtcClock`: live UTC mono di footer sidebar (pengecualian CC-27 tetap berlaku).
 - Storage meter: KB terpakai + amber bila >80% kuota (FR-M10-05).
 - Mobile (≤ md): sidebar → `Sheet`; semua form tetap satu kolom (D-15, NFR-06).
+- Lebar konten shell: **FLUID** — `w-full` tanpa `mx-auto max-w-*`; jarak kiri/kanan
+  hanya dari padding `<main>` (`p-4 lg:p-8`). Keputusan PO, merevisi norma cap-terpusat
+  sebelumnya: pada layar target, centering menyisakan gap kosong berlebihan.
+  Pengecualian: kertas laporan tetap `mx-auto w-full max-w-[860px]` (ukuran fisik A4 —
+  tak menyesuaikan layar) dan Dialog/Sheet (posisi milik komponen shadcn).
 
 ---
 

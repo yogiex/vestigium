@@ -206,7 +206,7 @@ export function LoginView() {
                     className="text-[10px] font-mono font-medium uppercase tracking-[0.14em] text-muted-foreground">
                     Nama lengkap
                   </label>
-                  <Input id="name" placeholder="mis. S. Pratama, DES" className="h-11"
+                  <Input id="name" placeholder="mis. Abe no Seimei, DES" className="h-11"
                     {...setup.register('name')} />
                   {setup.formState.errors.name && (
                     <p className="text-xs text-destructive">{setup.formState.errors.name.message}</p>)}

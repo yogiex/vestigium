@@ -50,7 +50,7 @@ export function AuditView() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="w-full space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">06 / Audit Log</p>

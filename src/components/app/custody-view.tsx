@@ -68,7 +68,7 @@ export function CustodyView() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="w-full space-y-6">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">04 / Chain of Custody</p>
           <h1 className="text-2xl font-semibold tracking-tight">Rantai Pemegangan Bukti</h1>

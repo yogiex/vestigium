@@ -81,7 +81,7 @@ function CaseDetailInner() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="w-full space-y-6">
         <Button variant="ghost" size="sm" className="-ml-2 font-mono text-xs text-muted-foreground"
           onClick={() => router.push('/cases')}>
           <ArrowLeft className="size-4" /> Register Kasus

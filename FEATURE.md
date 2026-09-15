@@ -1,6 +1,6 @@
 # FEATURE.md — Vestigium (Digital Forensic Record System)
 
-> **Versi:** 1.2 · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
+> **Versi:** 1.4 · **Status:** Aktif — acuan tertinggi untuk semua keputusan produk
 > **Acuan domain:** ISO/IEC 27037:2012 — Identification · Collection · Acquisition · Preservation
 > **Dokumen turunan:** `PRD.md` (persyaratan FR/NFR) · `DATA.md` (skema) · `DESIGN.md` (UI/UX) · `CODE.md` (disiplin kode)
 > **Aturan dokumen:** Setiap fitur baru WAJIB masuk dokumen ini dulu sebelum diimplementasikan.
@@ -409,7 +409,7 @@ adopsi lembaga eksternal / multi-tenant (P-15; jalurnya L3).
 
 | Dokumen | Status |
 |---|---|
-| FEATURE.md (ini) | ✅ 1.1 Baselined |
+| FEATURE.md (ini) | ✅ 1.4 Baselined |
 | PRD.md | ✅ 0.2 — D-01…D-22 baselined |
 | DATA.md | ✅ 1.1 — skema + zod contract + secure import |
 | DESIGN.md | ✅ 0.2 — multi-environment, UUID param |
@@ -429,3 +429,5 @@ Keputusan terbuka: **—** (semua D-01…D-22 & K-1…K-6 baselined).
 | 1.0 | Re-baseline stack: Next.js + shadcn + Tailwind (D-11 superseded; D-19/20/21 ditambahkan) · dual timestamp menjadi prinsip konstitusi (#2) · skenario penerimaan S1–S7 · jalur evolusi L1/L2/L3 · zero-outbound naik menjadi prinsip konstitusi (#10) · status dokumen & keputusan dirapikan |
 | 1.1 | D-22 multi-environment (build-time mode, dua pipeline) · Problem Register §1.1 (P-01…P-16) · `sourceClockNotes` (K-4) · out-of-scope: device linking, label fisik, adopsi lembaga (K-5) · lisensi MIT (K-1/D-17) · status seluruh dokumen dinaikkan ke baselined |
 | 1.2 | D-13 diimplementasikan: seed demo via login (`seedDemo`, akun persona `@vestigium.demo` tanpa password) — jalur "mulai kosong" tetap default, FR-M10-04 tersedia lewat gerbang RBAC `RESET_DEMO` |
+| 1.3 | Norma lebar konten (DESIGN §5): shell **fluid** — `w-full` tanpa `mx-auto max-w-*`, jarak hanya dari padding `<main>`; kertas A4 tetap `max-w-[860px] mx-auto` (revisi keputusan PO atas usulan cap-terpusat) |
+| 1.4 | Persona demo: tokoh era Heian (Michinaga/Shōnagon/Seimei/Raikō/Takamura; subjek kasus: Masakado) — homase naratif, kontrak peran & skema tidak berubah |

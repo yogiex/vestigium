@@ -48,7 +48,7 @@ function Inner() {
   return (
     <AppShell>
       {/* Toolbar — no-print */}
-      <div className="mx-auto max-w-4xl space-y-4 print:hidden">
+      <div className="w-full space-y-4 print:hidden">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">09 / Laporan</p>
           <h1 className="text-2xl font-semibold tracking-tight">Laporan Akuisisi &amp; Preservasi</h1>
